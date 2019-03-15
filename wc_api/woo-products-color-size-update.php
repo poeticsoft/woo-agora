@@ -1,21 +1,21 @@
 
 <?php
 
-	function poeticsoft_api_woo_families_categories_update_endpoint ($request_data){
+	function poeticsoft_api_woo_products_color_size_update_endpoint ($request_data){
 
 		$data = new stdClass();	
 		$data->Data = [];
 		$data->Status = new stdClass();	
 		$data->Status->Code = 'OK';	
 		$data->Status->Reason = '';
-		$data->Status->Message = 'Families categories updated';
+		$data->Status->Message = 'Product color size updated';
 
 		try {
 
-			$NewList =  json_encode($request_data->get_params());
+			$ProductsColorSize =  json_encode($request_data->get_params());
 			$Wrote = file_put_contents(
-				__DIR__ . '/data/families-categories.json',
-				$NewList
+				__DIR__ . '/data/products-color-size.json',
+				$ProductsColorSize
 			);
 
 			if(!$Wrote) {
@@ -39,11 +39,11 @@
             
 		register_rest_route(
 			'poeticsoft', 
-			'woo-families-categories-update', 
+			'woo-products-color-size-update', 
 			array(
 
 				'methods'  => 'POST',
-				'callback' => 'poeticsoft_api_woo_families_categories_update_endpoint'
+				'callback' => 'poeticsoft_api_woo_products_color_size_update_endpoint'
 			)
 		);
 	});	

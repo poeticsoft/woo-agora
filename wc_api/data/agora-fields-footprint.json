@@ -1,4 +1,31 @@
 {
-	"FootPrint": "Familia|Producto|Código Barras|PLU|Precio Coste|% Impuesto|% Impuesto compra|Control Stock|Venta Peso|Color|texto Boton|Precio General",
-	"ForTree": ["L", "C", "D", 2]
+	"FieldHash": "Familia|Producto|Código Barras|PLU|Precio Coste|% Impuesto|% Impuesto compra|Control Stock|Venta Peso|Color|texto Boton|Precio General",
+	"FinalFields": [
+		"Familia",
+		"Producto",
+		"Parent",
+		"Código Barras",
+		"Color",
+		"Size",
+		"PLU",
+		"Precio Coste",
+		"% Impuesto",
+		"% Impuesto compra",
+		"Control Stock",
+		"Venta Peso",
+		"Color",
+		"texto Boton",
+		"Precio General"
+	],
+	"ForTree": {
+		"MaxCellIndex": "L",
+		"SKUCellIndex": "C",
+		"SKUCellAfterInsertIndex": "D",
+		"InsertParentIndex": 2,
+		"ParentCellIndex": "C",
+		"InsertColorSizeIndex": 13,
+		"ColorCellIndex": "N",
+		"SizeCellIndex": "O"
+	},
+	"NoEdit": "ABDEFGHIJKLM"
 }

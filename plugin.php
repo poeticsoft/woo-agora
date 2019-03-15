@@ -22,9 +22,14 @@
 	*/
 	
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-read.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-products-update.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-products-color-size-read.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-products-color-size-update.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-categories-read.php');
-	require_once(dirname(__FILE__) . '/wc_api/woo-families-categories-update.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-families-categories-read.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-families-categories-update.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-agora-excel-data-read.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-agora-excel-data-update.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-images-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-images-upload.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-images-remove.php');

@@ -1,18 +1,18 @@
 
 <?php
 
-	function poeticsoft_api_woo_families_categories_read_endpoint ($params){
+	function poeticsoft_api_woo_agora_excel_data_read_endpoint ($params){
 
 		$data = new stdClass();	
 		$data->Data = [];
 		$data->Status = new stdClass();	
 		$data->Status->Code = 'OK';	
 		$data->Status->Reason = '';
-		$data->Status->Message = 'Families categories readed';
+		$data->Status->Message = 'Agora excel data readed';
 
-		try { 
+		try {
 
-			$Relations = file_get_contents(__DIR__ . '/data/families-categories.json');
+			$Relations = file_get_contents(__DIR__ . '/data/agora-excel-data.json');
 			$data->Data = json_decode($Relations, true);
 	
 		} catch (Exception $e) {
@@ -29,11 +29,11 @@
             
 		register_rest_route(
 			'poeticsoft', 
-			'woo-families-categories-read', 
+			'woo-agora-excel-data-read', 
 			array(
 
 				'methods'  => 'GET',
-				'callback' => 'poeticsoft_api_woo_families_categories_read_endpoint'
+				'callback' => 'poeticsoft_api_woo_agora_excel_data_read_endpoint'
 			)
 		);
 	});	

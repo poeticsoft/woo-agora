@@ -1,20 +1,20 @@
 
 <?php
 
-	function poeticsoft_api_woo_families_categories_read_endpoint ($params){
+	function poeticsoft_api_woo_products_color_size_read_endpoint ($params){
 
 		$data = new stdClass();	
 		$data->Data = [];
 		$data->Status = new stdClass();	
 		$data->Status->Code = 'OK';	
 		$data->Status->Reason = '';
-		$data->Status->Message = 'Families categories readed';
+		$data->Status->Message = 'Product color size readed';
 
-		try { 
+		try {
 
-			$Relations = file_get_contents(__DIR__ . '/data/families-categories.json');
-			$data->Data = json_decode($Relations, true);
-	
+			$ProductsColorSize = file_get_contents(__DIR__ . '/data/products-color-size.json');
+			$data->Data = json_decode($ProductsColorSize, true);
+
 		} catch (Exception $e) {
 
 			$data->Status->Code = 'KO';	
@@ -24,16 +24,16 @@
 
 		return ($data);
 	}	
- 
+
 	add_action( 'rest_api_init', function () {
-            
+						
 		register_rest_route(
 			'poeticsoft', 
-			'woo-families-categories-read', 
+			'woo-products-color-size-read', 
 			array(
 
 				'methods'  => 'GET',
-				'callback' => 'poeticsoft_api_woo_families_categories_read_endpoint'
+				'callback' => 'poeticsoft_api_woo_products_color_size_read_endpoint'
 			)
 		);
 	});	

@@ -1,27 +1,27 @@
 
 <?php
 
-	function poeticsoft_api_woo_families_categories_update_endpoint ($request_data){
+	function poeticsoft_api_woo_agora_excel_data_update_endpoint($request_data){
 
 		$data = new stdClass();	
 		$data->Data = [];
 		$data->Status = new stdClass();	
 		$data->Status->Code = 'OK';	
 		$data->Status->Reason = '';
-		$data->Status->Message = 'Families categories updated';
+		$data->Status->Message = 'Agora excel data saved'; 
 
 		try {
 
 			$NewList =  json_encode($request_data->get_params());
 			$Wrote = file_put_contents(
-				__DIR__ . '/data/families-categories.json',
+				__DIR__ . '/data/agora-excel-data.json',
 				$NewList
 			);
 
 			if(!$Wrote) {
 
 				$data->Status->Code = 'KO';	
-				$data->Status->Reason = 'Unknow error writing list';
+				$data->Status->Reason = 'Unknow error writing data';
 				$data->Status->Message = '';
 			}
 
@@ -39,11 +39,11 @@
             
 		register_rest_route(
 			'poeticsoft', 
-			'woo-families-categories-update', 
+			'woo-agora-excel-data-update', 
 			array(
 
 				'methods'  => 'POST',
-				'callback' => 'poeticsoft_api_woo_families_categories_update_endpoint'
+				'callback' => 'poeticsoft_api_woo_agora_excel_data_update_endpoint'
 			)
 		);
 	});	
