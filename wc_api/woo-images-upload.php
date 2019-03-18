@@ -1,12 +1,14 @@
 
 <?php
 
+	// https://github.com/verot/class.upload.php
+
 	require_once( ABSPATH . 'wp-admin/includes/image.php' );
 	require_once(dirname(__FILE__) . '/class.upload.php');
 
 	function poeticsoft_api_woo_images_upload_endpoint ($request){
 
-		$imgespath = WP_CONTENT_DIR . '/uploads/product-images';
+		$imgespath = WP_CONTENT_DIR . '/uploads/product-images/';
 		$handle = new upload($_FILES['image']);
 
 		$data = new stdClass();	
@@ -19,6 +21,7 @@
 		if ($handle->uploaded) {
 
 			$handle->image_convert = 'jpg';
+			$handle->file_new_name_ext = 'jpg';
 			$handle->jpeg_quality = 70;
 			$handle->image_resize = true;
 			$handle->image_ratio_y = true;
@@ -28,16 +31,14 @@
 			$handle->process($imgespath);
 			if ($handle->processed) { 
 
-				$FilePath = $imgespath . '/' . $handle->file_src_name;
-
 				$AttachmentIdExists = attachment_url_to_postid(
 					get_site_url() . 
 					'/wp-content/uploads/product-images/' .
-					$handle->file_src_name
+					$handle->file_dst_name 
 				);
 
 				$Attachment = array(
-					'guid'           => $handle->file_src_name, 
+					'guid'           => $handle->file_dst_name, 
 					'post_mime_type' => 'image/jpeg',
 					'post_title'     => 'IMAGE',
 					'post_content'   => '',
@@ -57,18 +58,20 @@
 
 				$AttachmentId = wp_insert_attachment(
 					$Attachment, 
-					'product-images/' . $handle->file_src_name
+					'product-images/' . $handle->file_dst_name
 				);
 
 				$AttachData = wp_generate_attachment_metadata(
 					$AttachmentId,
-					$FilePath
+					$handle->file_dst_pathname
 				);
 	
 				wp_update_attachment_metadata(
 					$AttachmentId, 
 					$AttachData
 				);
+
+				$data->Status->Message = 'Image uploaded ' . $handle->log;
 
 			}	else {	
 
@@ -84,7 +87,7 @@
 			$data->Status->Reason = $handle->error;
 		}
 
-		return ($data);
+		return $data;
 	}	
 
 	add_action(

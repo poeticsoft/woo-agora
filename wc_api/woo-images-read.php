@@ -46,8 +46,10 @@
 				$SeriesIndex = strpos($BaseNameClean, '-');
 				$SeriesIndex = $SeriesIndex ? $SeriesIndex : strlen($BaseNameClean);
 				$SKU = substr($BaseNameClean, 0, $SeriesIndex);
+				$OrderName = $BaseNameClean == $SKU ? $BaseNameClean . '-0' : $BaseNameClean;
 		
 				$Image = new Imagen();
+				$Image->ordername = $OrderName;
 				$Image->name = $FileNameClean;
 				$Image->sku = $SKU;
 				$Image->date = $Date;
