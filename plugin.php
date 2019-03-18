@@ -18,9 +18,16 @@
 	error_reporting(E_ALL);
 
 	/**
+	 * filters
+	*/
+	
+	require_once(dirname(__FILE__) . '/image/image-src.php');	
+
+	/**
 	 * ROUTES
 	*/
 	
+	require_once(dirname(__FILE__) . '/wc_api/woo-products-raw-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-update.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-color-size-read.php');

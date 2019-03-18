@@ -4,20 +4,25 @@
 	function poeticsoft_api_woo_products_read_endpoint ($params){
 
 		$Allowed_Product_Fields = [
-			'id',
-			'parent_id',
 			'name',
 			'sku',
 			'sale_price',
 			'stock_quantity',
 			'attributes',
 			'category_ids',
-			'image_id'
+			'image_id',
+			'gallery_image_ids',
+			'image'
 		];
 		
 		$args = array(
 			'status' => 'publish' 
 		); 
+
+		function mapVariationGalleryImages($Image) {
+
+			return $Image['image_id'];
+		}
 
 		$WooProducts = wc_get_products($args);
 
@@ -44,16 +49,28 @@
 			$ProductFiltered['type'] = $ProductType;
 			$ProductFiltered['parent_sku'] = null;
 
-			if($ProductType == 'variable') {	
+			if(
+				$ProductType == 'simple' OR
+				$ProductType == 'variable'
+			) {
+				
+				$ProductFiltered['attributes']['attribute_color'] = $WooProduct->get_attribute('color');
+				$ProductFiltered['attributes']['attribute_size'] = $WooProduct->get_attribute('size');
+			}
+
+			array_push(
+				$data->Data,
+				$ProductFiltered
+			);
+
+			if($ProductType == 'variable') {
 				
 				$ProductVariations = $WooProduct->get_available_variations();
 
 				foreach ($ProductVariations as $ProductVariation) {
 					
 					$ProductVariationMapped = array(
-						'id' => $ProductVariation['variation_id'],
 						'type' => 'variation',
-						'parent_id' => $ProductData['id'],
 						'name' => $ProductVariation['variation_description'],
 						'sku' => $ProductVariation['sku'],
 						'parent_sku' => $ProductData['sku'],
@@ -61,21 +78,16 @@
 						'stock_quantity' => $ProductVariation['max_qty'],
 						'attributes' => $ProductVariation['attributes'],
 						'category_ids' => $ProductData['category_ids'],
-						'image_id' => $ProductVariation['image_id']
+						'image_id' => $ProductVariation['image_id'],
+						'variation_gallery_images' => array_map('mapVariationGalleryImages', $ProductVariation['variation_gallery_images'])
 					);
 
 					array_push(
 						$data->Data,
 						$ProductVariationMapped
-						// $ProductVariation
 					);
 				}	
 			}
-
-			array_push(
-				$data->Data,
-				$ProductFiltered
-			);
 		}
 
 		return ($data);

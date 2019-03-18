@@ -1,18 +1,6 @@
-<?php
-
-	function delTree($dir) { 
-
-		$files = array_diff(scandir($dir), array('.','..')); 
-		foreach ($files as $file) { 
-
-			(is_dir("$dir/$file")) ? delTree("$dir/$file") : unlink("$dir/$file"); 
-		} 
-		return rmdir($dir); 
-	} 	
+<?php	
 
 	function poeticsoft_api_woo_images_clean_endpoint ($request){
-
-		$imgespath = WP_CONTENT_DIR . '/product-images';
 
 		$data = new stdClass();	
 		$data->Data = [];
@@ -21,7 +9,24 @@
 		$data->Status->Reason = '';
 		$data->Status->Message = 'Images deleted';
 
-		delTree($imgespath);
+		$imgesfiles = glob(WP_CONTENT_DIR . '/uploads/product-images/*');
+		
+		try {
+
+			foreach($imgesfiles as $file){
+
+				if(is_file($file)){
+					
+					unlink($file);
+				}
+			}
+
+		} catch (Exception $e) {
+
+			$data->Status->Code = 'KO';	
+			$data->Status->Reason = $e->getMessage();
+			$data->Status->Message = '';
+		}
 
 		return ($data);
 	}	
