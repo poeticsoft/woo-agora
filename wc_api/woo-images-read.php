@@ -12,7 +12,7 @@
 	function poeticsoft_api_woo_images_read_endpoint ($request) {
 
 		$imgespath = WP_CONTENT_DIR . '/uploads/product-images';
-		$ImgThumbSize = '300';	
+		$ImgThumbSize = '100';	
 		$ImgThumbDescriptor = '-' . $ImgThumbSize . 'x' . $ImgThumbSize;	
 
 		$data = new stdClass();	
@@ -50,6 +50,7 @@
 		
 				$Image = new Imagen();
 				$Image->ordername = $OrderName;
+				$Image->thumb = $BaseNameClean . $ImgThumbDescriptor . '.jpg';
 				$Image->name = $FileNameClean;
 				$Image->sku = $SKU;
 				$Image->date = $Date;

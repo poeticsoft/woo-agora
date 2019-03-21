@@ -11,12 +11,12 @@
 	*
 	**/	
 
-	/* DEBUG */
+	/* DEBUG
+ */
 
 	ini_set('display_errors', 1);
 	ini_set('display_startup_errors', 1);
 	error_reporting(E_ALL);
-
 	/**
 	 * filters
 	*/
@@ -27,9 +27,8 @@
 	 * ROUTES
 	*/
 	
-	require_once(dirname(__FILE__) . '/wc_api/woo-products-raw-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-read.php');
-	require_once(dirname(__FILE__) . '/wc_api/woo-products-update.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-products-process.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-color-size-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-color-size-update.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-categories-read.php');
