@@ -8,14 +8,31 @@
 		$data->Status = new stdClass();	
 		$data->Status->Code = 'OK';	
 		$data->Status->Reason = '';
-		$data->Status->Message = 'Agora excel data saved'; 
+		$data->Status->Message = 'Agora excel data saved';
+		
+		$ExcelData = $request_data->get_params();
+		$ProductsSheetData = $ExcelData['ProductsSheetData'];
+		$ColorSizeData = $ExcelData['ColorSizeData'];
+		$ParentSKUData = $ExcelData['ParentSKUData'];
 
 		try {
 
-			$NewList =  json_encode($request_data->get_params());
+			$ProductsSheet =  json_encode($ProductsSheetData);
 			$Wrote = file_put_contents(
 				__DIR__ . '/data/agora-excel-data.json',
-				$NewList
+				$ProductsSheet
+			);
+
+			$ColorSize =  json_encode($ColorSizeData);
+			$Wrote = file_put_contents(
+				__DIR__ . '/data/products-color-size.json',
+				$ColorSize
+			);
+
+			$ParentSKU =  json_encode($ParentSKUData);
+			$Wrote = file_put_contents(
+				__DIR__ . '/data/products-parent-sku.json',
+				$ParentSKU
 			);
 
 			if(!$Wrote) {

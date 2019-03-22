@@ -5,8 +5,6 @@
 		"Producto",
 		"Parent",
 		"Código Barras",
-		"Color",
-		"Size",
 		"PLU",
 		"Precio Coste",
 		"% Impuesto",
@@ -15,7 +13,9 @@
 		"Venta Peso",
 		"Color",
 		"texto Boton",
-		"Precio General"
+		"Precio General",
+		"Color",
+		"Size"
 	],
 	"ForTree": {
 		"MaxCellIndex": "L",
@@ -26,6 +26,12 @@
 		"InsertColorSizeIndex": 13,
 		"ColorCellIndex": "N",
 		"SizeCellIndex": "O"
+	},
+	"ForData": {
+		"ParentIndex": 2,
+		"SKUIndex": 3,
+		"ColorIndex": 13,
+		"SizeIndex": 14
 	},
 	"NoEdit": "ABDEFGHIJKLM"
 }
