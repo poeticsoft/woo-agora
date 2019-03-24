@@ -12,7 +12,7 @@
 
 		try {
 
-			$footprint = file_get_contents(__DIR__ . '/data/agora-fields-footprint.json');
+			$footprint = file_get_contents(__DIR__ . '/data/fields-footprint/data.json');
 
 			if($footprint) {				
 

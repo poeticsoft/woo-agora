@@ -12,7 +12,7 @@
 
 		try {
 
-			$ProductsColorSize = file_get_contents(__DIR__ . '/data/products-color-size.json');
+			$ProductsColorSize = file_get_contents(__DIR__ . '/data/color-size/data.json');
 			$data->Data = json_decode($ProductsColorSize, true);
 
 		} catch (Exception $e) {

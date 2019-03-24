@@ -13,12 +13,18 @@
 		try {
 
 			$NewList =  json_encode($request_data->get_params());
-			$Wrote = file_put_contents(
-				__DIR__ . '/data/families-categories.json',
+			
+			$WroteBak = file_put_contents(
+				__DIR__ . '/data/families-categories/data' . date('_Y_m_d_H_i_s') . '.json',
 				$NewList
 			);
 
-			if(!$Wrote) {
+			$Wrote = file_put_contents(
+				__DIR__ . '/data/families-categories/data.json',
+				$NewList
+			);
+
+			if(!$Wrote OR !$WroteBak) {
 
 				$data->Status->Code = 'KO';	
 				$data->Status->Reason = 'Unknow error writing list';

@@ -16,12 +16,7 @@
 
 	ini_set('display_errors', 1);
 	ini_set('display_startup_errors', 1);
-	error_reporting(E_ALL);
-	/**
-	 * filters
-	*/
-	
-	require_once(dirname(__FILE__) . '/image/image-src.php');	
+	error_reporting(E_ALL);	
 
 	/**
 	 * ROUTES
@@ -39,7 +34,6 @@
 	require_once(dirname(__FILE__) . '/wc_api/woo-agora-excel-data-update.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-images-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-images-upload.php');
-	require_once(dirname(__FILE__) . '/wc_api/woo-images-remove.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-images-clean.php');
 	require_once(dirname(__FILE__) . '/wc_api/send-mail.php');
 	require_once(dirname(__FILE__) . '/wc_api/get-max-upload-size.php');

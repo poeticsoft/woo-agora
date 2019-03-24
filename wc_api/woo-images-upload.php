@@ -4,7 +4,7 @@
 	// https://github.com/verot/class.upload.php
 
 	require_once( ABSPATH . 'wp-admin/includes/image.php' );
-	require_once(dirname(__FILE__) . '/class.upload.php');
+	require_once(dirname(__FILE__) . '/utils/class.upload.php');
 
 	function poeticsoft_api_woo_images_upload_endpoint ($request){
 

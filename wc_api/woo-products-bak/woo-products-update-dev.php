@@ -8,6 +8,7 @@
 	// https://stackoverflow.com/questions/47518333/create-programmatically-a-variable-product-and-two-new-attributes-in-woocommerce
 	// https://docs.woocommerce.com/wc-apidocs/class-WC_Product.html
 	// https://businessbloomer.com/woocommerce-easily-get-product-info-title-sku-desc-product-object/
+	// https://www.sbloggers.com/add-a-woocommerce-product-using-custom-php-code-programmatically
 
 	function poeticsoft_api_woo_products_update_dev_endpoint ( $request_data ){
 

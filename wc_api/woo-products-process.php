@@ -35,7 +35,7 @@
 
 			$ProductDataJSON =  json_encode($ProcessData['products']);
 			$Wrote = file_put_contents(
-				__DIR__ . '/data/process/' . $ProcessMode . '.json',
+				__DIR__ . '/data/process-parts/' . $ProcessMode . '.json',
 				$ProductDataJSON . ''
 			);
 

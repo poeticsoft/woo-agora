@@ -12,7 +12,7 @@
 
 		try {
 
-			$ProductsParentSKU = file_get_contents(__DIR__ . '/data/products-parent-sku.json');
+			$ProductsParentSKU = file_get_contents(__DIR__ . '/data/parent-sku/data.json');
 			$data->Data = json_decode($ProductsParentSKU, true);
 
 		} catch (Exception $e) {

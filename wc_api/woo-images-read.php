@@ -1,7 +1,7 @@
 <?php
 
 	require_once( ABSPATH . 'wp-admin/includes/image.php' );
-	require_once(dirname(__FILE__) . '/format-size-units.php');	
+	require_once(dirname(__FILE__) . '/utils/format-size-units.php');	
 
 	class Imagen {
 		public $name;
