@@ -12,7 +12,7 @@
 
 		try {
 
-			$Relations = file_get_contents(__DIR__ . '/data/agora-excel-data.json');
+			$Relations = file_get_contents(__DIR__ . '/data/agora-excel/data.json');
 			$data->Data = json_decode($Relations, true);
 	
 		} catch (Exception $e) {

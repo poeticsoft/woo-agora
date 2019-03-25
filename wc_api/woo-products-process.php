@@ -24,18 +24,31 @@
 
 		$data = new stdClass();	
 		$data->Status = new stdClass();
+		$data->Status->Code = 'OK';	
+		$data->Status->Reason = '';
+		$data->Status->Message = '';
 
 		$ProcessData = $request_data->get_params();
 		$ProcessMode = $ProcessData['mode'];
+		$ProcessChunk = $ProcessData['chunk'];
+		$Products = $ProcessData['products'];		
 		$Action = 'poeticsoft_api_woo_products_process_' . $ProcessMode;
+		
+		$data->Status->Message = '';
+
+		$data->Status->Code = 'KO';	
+		$data->Status->Reason = 'Unknow error writing data';
+		$data->Status->Message = '';
 
 		// $data->Status = $Action($Products);
 
 		try {
 
-			$ProductDataJSON =  json_encode($ProcessData['products']);
+			$ActionResult = $Action($ProcessData['products']);
+
+			$ProductDataJSON =  json_encode($ProcessData['products'], JSON_PRETTY_PRINT);
 			$Wrote = file_put_contents(
-				__DIR__ . '/data/process-parts/' . $ProcessMode . '.json',
+				__DIR__ . '/data/process-parts/' . $ProcessMode . '_' . $ProcessChunk . '.json',
 				$ProductDataJSON . ''
 			);
 
@@ -44,9 +57,6 @@
 				$data->Status->Code = 'KO';	
 				$data->Status->Reason = 'Unknow error writing data';
 				$data->Status->Message = '';
-			} else {
-
-				$data->Status = $Action($ProcessData['products']);
 			}
 
 		} catch (Exception $e) {

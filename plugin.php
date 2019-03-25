@@ -24,6 +24,7 @@
 	
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-process.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-products-remove-all.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-parent-sku-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-color-size-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-color-size-update.php');
