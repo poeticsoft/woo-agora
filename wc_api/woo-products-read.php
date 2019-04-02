@@ -6,7 +6,7 @@
 		$Allowed_Product_Fields = [
 			'name',
 			'sku',
-			'sale_price',
+			'regular_price',
 			'stock_quantity',
 			'attributes',
 			'category_ids',
@@ -15,7 +15,8 @@
 			'image'
 		];
 		
-		$args = array(
+		$args = array(			
+			'numberposts' => -1,
 			'status' => 'publish' 
 		); 
 
@@ -47,15 +48,16 @@
 			);
 			
 			$ProductFiltered['type'] = $ProductType;
-			$ProductFiltered['parent_sku'] = null;
 
 			if(
 				$ProductType == 'simple' OR
 				$ProductType == 'variable'
 			) {
 				
-				$ProductFiltered['attributes']['attribute_color'] = $WooProduct->get_attribute('color');
-				$ProductFiltered['attributes']['attribute_size'] = $WooProduct->get_attribute('size');
+				$ProductFiltered['attributes'] = array(
+					'pa_color' => $WooProduct->get_attribute('pa_color'),
+					'pa_size' => $WooProduct->get_attribute('pa_size')
+				);
 			}
 
 			array_push(
@@ -68,21 +70,42 @@
 				$ProductVariations = $WooProduct->get_available_variations();
 
 				foreach ($ProductVariations as $ProductVariation) {
+
+					$Name = $ProductVariation['variation_description'];
+					$Name = str_replace('<p>', '', $Name);
+					$Name = str_replace('</p>', '', $Name);
+					$Name = str_replace("\n", '', $Name);
 					
 					$ProductVariationMapped = array(
 						'type' => 'variation',
-						'name' => $ProductVariation['variation_description'],
+						'name' => $Name,
 						'sku' => $ProductVariation['sku'],
 						'parent_sku' => $ProductData['sku'],
-						'sale_price' => $ProductVariation['display_regular_price'],
+						'regular_price' => $ProductVariation['display_regular_price'],
 						'stock_quantity' => $ProductVariation['max_qty'],
-						'attributes' => $ProductVariation['attributes'],
 						'category_ids' => $ProductData['category_ids'],
 						'image_id' => $ProductVariation['image_id'],
-						'variation_gallery_images' => array_map('mapVariationGalleryImages', $ProductVariation['variation_gallery_images'])
+						'variation_gallery_images' => array_map(
+							'mapVariationGalleryImages', 
+							$ProductVariation['variation_gallery_images']
+						)
 					);
+					$Attributes = $ProductVariation['attributes'];
+					$ProductVariationMapped['attributes'] = array();
 
+					if($Attributes['attribute_pa_color']) {
+
+						$term = get_term_by('slug', $Attributes['attribute_pa_color'], 'pa_color')->name;						
+						$ProductVariationMapped['attributes']['color'] = $term;
+					}
+
+					if($Attributes['attribute_pa_size']) {
+
+						$term = get_term_by('slug', $Attributes['attribute_pa_size'], 'pa_size')->name;						
+						$ProductVariationMapped['attributes']['size'] = $term;
+					}
 					array_push(
+
 						$data->Data,
 						$ProductVariationMapped
 					);

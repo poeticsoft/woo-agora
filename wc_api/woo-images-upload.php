@@ -25,7 +25,7 @@
 			$handle->jpeg_quality = 70;
 			$handle->image_resize = true;
 			$handle->image_ratio_y = true;
-			$handle->image_x = 1600;
+			$handle->image_x = 2400;
 			$handle->file_overwrite = true;
 			
 			$handle->process($imgespath);

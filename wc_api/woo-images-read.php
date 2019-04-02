@@ -50,6 +50,7 @@
 		
 				$Image = new Imagen();
 				$Image->ordername = $OrderName;
+				$Image->view = $BaseNameClean . '.jpg';
 				$Image->thumb = $BaseNameClean . $ImgThumbDescriptor . '.jpg';
 				$Image->name = $FileNameClean;
 				$Image->sku = $SKU;

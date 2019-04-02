@@ -40,7 +40,7 @@
 			$WooProduct->delete(true);
 		}
 
-		$data->Status->Message = $params['status'] . $DeletedList;
+		$data->Status->Message = $DeletedList;
 
 		return ($data);
 	}	

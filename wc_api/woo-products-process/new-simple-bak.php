@@ -1,6 +1,8 @@
 
 <?php
 
+require_once(dirname(__FILE__) . '/pepare-product-attributes.php');
+
 function poeticsoft_api_woo_products_process_new_simple ($Products){
 
 	$Status = new stdClass();
@@ -13,12 +15,9 @@ function poeticsoft_api_woo_products_process_new_simple ($Products){
 
 		$ExistentID = wc_get_product_id_by_sku($Product['sku']);
 
-		if($ExistentID) {
+		if($ExistentID) continue;
 
-			$Status->Code = 'KO';
-			$Errors .= ' Id Exist';			
-			continue;
-		}
+		$Errors = '|' . $Errors . json_encode(wp_get_object_terms($ExistentID)) . '|';
 
 		try {
 
@@ -45,36 +44,26 @@ function poeticsoft_api_woo_products_process_new_simple ($Products){
 				$NSP->set_gallery_image_ids($Product['gallery_image_ids']);
 			}
 
-			/* Save */
-
-			$ID = $NSP->save();
-
 			/* Attributes */
+			// https://stackoverflow.com/questions/52937409/create-programmatically-a-product-using-crud-methods-in-woocommerce-3/52941994#52941994			
 
-			$ProductAttributes = array();
-			$Position = 0;
+			$FormattedAttributes = array();
+			foreach($Product['attributes'] as $Name => $Value) {
 
-			foreach($Product['attributes'] as $name => $value) { 
-
-				$taxonomy = 'pa_' . $name;
-				if(!term_exists($value, $taxonomy)) {
-
-        	wp_insert_term($value, $taxonomy);
-				}
-
-				$ProductAttributes[$taxonomy] = array(
-					'name' => 'pa_' . $name,
-					'value' => $value,
-					'position' => $Position,
-					'is_visible' => true,
-					'is_variation' => false,
-					'is_taxonomy' => false
+				$FormattedAttributes[$Name] = array(
+					'term_names' => array($Value),
+					'for_variation' => false
 				);
-
-				$Position++;
 			}
+			$PreparedAttributes = wc_prepare_product_attributes($FormattedAttributes);
 
-			update_post_meta($ID,'_product_attributes', $ProductAttributes);
+			$NSP->set_attributes($PreparedAttributes);
+
+			// Save
+
+			$product_id = $NSP->save();
+			$Status->Code = 'KO';
+			$Errors = $Errors . json_encode($PreparedAttributes);
 
 		} catch (Exception $e) {
 
