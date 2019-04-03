@@ -50,13 +50,22 @@
 			$ProductFiltered['type'] = $ProductType;
 
 			if(
-				$ProductType == 'simple' OR
+				$ProductType == 'simple'
+			) {
+				
+				$ProductFiltered['attributes'] = array(
+					'color' => $WooProduct->get_attribute('pa_color'),
+					'size' => $WooProduct->get_attribute('pa_size')
+				);
+			}
+
+			if(
 				$ProductType == 'variable'
 			) {
 				
 				$ProductFiltered['attributes'] = array(
-					'pa_color' => $WooProduct->get_attribute('pa_color'),
-					'pa_size' => $WooProduct->get_attribute('pa_size')
+					'color' => implode('|', explode(', ', $WooProduct->get_attribute('pa_color'))),
+					'size' => implode('|', explode(', ', $WooProduct->get_attribute('pa_size')))
 				);
 			}
 
@@ -104,6 +113,7 @@
 						$term = get_term_by('slug', $Attributes['attribute_pa_size'], 'pa_size')->name;						
 						$ProductVariationMapped['attributes']['size'] = $term;
 					}
+
 					array_push(
 
 						$data->Data,

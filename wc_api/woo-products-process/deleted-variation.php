@@ -2,25 +2,29 @@
 <?php
 
 function poeticsoft_api_woo_products_process_deleted_variation ($Products){
-
+		
 	$Status = new stdClass();
-	$Status->Code = 'KO';
+	$Status->Code = 'OK';
 
 	$Errors = '';
 
 	foreach($Products as $Product) {
 
+		$VariationId = wc_get_product_id_by_sku($Product['sku']);
+		if(!$VariationId) {
+
+			$Status->Code = 'KO';
+			$Errors .= 'Variation not exist';			
+			continue;
+		}	
+
+		$CVP = wc_get_product($VariationId);
+
 		try {
 
-			$VariationId = wc_get_product_id_by_sku($Product['sku']);
-			if(!$VariationId) {
+			$Deleted = wp_delete_post($VariationId);
 
-				continue;
-			}
-
-			$VariationDeleted = wc_get_product($VariationId)->delete();
-
-			$Errors = json_encode($VariationDeleted);
+			$DSP->delete();	
 			
 		} catch (Exception $e) {
 
@@ -30,5 +34,7 @@ function poeticsoft_api_woo_products_process_deleted_variation ($Products){
 	}
 
 	$Status->Reason = $Errors;
+
+	return $Status;	
 	
 } 

@@ -10,48 +10,66 @@
 	
 		foreach($Products as $Product) {
 	
-			$ProductID = wc_get_product_id_by_sku($Product['sku']);
-	
-			if(!$ProductID) continue;
+			$ID = wc_get_product_id_by_sku($Product['sku']);
+			if(!$ID) {
+
+				$Status->Code = 'KO';
+				$Errors .= 'Product not exist';			
+				continue;
+			}	
 	
 			try {
 
-				$SP = wc_get_product($ProductID);
+				$CSP = wc_get_product($ID);
 	
-				$SP->set_name($Product['name']);
-				$SP->set_status("publish");
-				$SP->set_catalog_visibility('visible');
-				$SP->set_sku($Product['sku']);
-				$SP->set_regular_price($Product['regular_price']); 
-				$SP->set_manage_stock(true);
-				$SP->set_category_ids($Product['category_ids']);
-				$SP->set_stock_quantity($Product['stock_quantity']);
+				$CSP->set_name($Product['name']);
+				$CSP->set_regular_price($Product['regular_price']); 
+				$CSP->set_category_ids($Product['category_ids']);
+
+				$NewQuantity = wc_update_product_stock($CPV, intval($Product['stock_quantity']));
 	
 				/* Images */
 	
 				if($Product['image_id']) {
 	
-					$SP->set_image_id($Product['image_id']);
+					$CSP->set_image_id($Product['image_id']);
 				}
 	
 				if(count($Product['gallery_image_ids'] > 0)) {
 	
-					$SP->set_gallery_image_ids($Product['gallery_image_ids']);
+					$CSP->set_gallery_image_ids($Product['gallery_image_ids']);
 				}
-	
+
 				/* Attributes */
-	
+
 				$ProductAttributes = array();
-				foreach($Product['attributes'] as $Name => $Value){
-	
-					$ProductAttributes['attribute_' . $Name] = $Value;
+				$Position = 0;
+
+				foreach($Product['attributes'] as $name => $value) { 
+
+					$taxonomy = 'pa_' . $name;
+					if(!term_exists($value, $taxonomy)) {
+
+						wp_insert_term($value, $taxonomy);
+					}
+
+					$ProductAttributes[$taxonomy] = array(
+						'name' => 'pa_' . $name,
+						'value' => $value,
+						'position' => $Position,
+						'is_visible' => true,
+						'is_variation' => false,
+						'is_taxonomy' => false
+					);
+
+					$Position++;
 				}
-	
-				$SP->set_attributes($ProductAttributes);
-	
+
+				update_post_meta($ID,'_product_attributes', $ProductAttributes);
+
 				// Save
 	
-				$product_id = $SP->save();
+				$CSP->save();	
 				
 			} catch (Exception $e) {
 	

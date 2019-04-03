@@ -17,32 +17,32 @@
 		$data->Status->Reason = '';
 		$data->Status->Message = 'Web products readed';
 
+
 		foreach ($WooProducts as $WooProduct) {
 
 			$ProductData = $WooProduct->get_data();
 			$ProductType = $WooProduct->get_type();
 			$ProductData['type'] = $ProductType;
 
+			/*
 			array_push(
 				$data->Data,
 				$ProductData
 			);
+			*/
 
 			if($ProductType == 'variable') {
 				
 				$ProductVariations = $WooProduct->get_available_variations();
 
 				foreach ($ProductVariations as $ProductVariation) {
-
-					
-					$ProductVariation['type'] = 'variation';
 					
 					array_push(
 						$data->Data,
 						$ProductVariation
 					);
-				}	
-			}
+				}
+			}	
 		}
 
 		return ($data);
