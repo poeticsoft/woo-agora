@@ -25,13 +25,15 @@ function poeticsoft_api_woo_products_process_new_variation ($Products){
 
 				wc_get_product($VariationId)->delete();
 			}	
+			
+			$StockQuantity = $Product['actual_stock_quantity'] ? $Product['actual_stock_quantity'] : 0;
 
 			$NPV = new WC_Product_Variation();
 			$NPV->set_parent_id($ParentId);
 			$NPV->set_sku($Product['sku']); 
 			$NPV->set_regular_price($Product['regular_price']);
 			$NPV->set_manage_stock(true);
-			$NPV->set_stock_quantity($Product['stock_quantity']);
+			$NPV->set_stock_quantity($StockQuantity);
 			$NPV->set_description($Product['name']);
 
 			/* Images */

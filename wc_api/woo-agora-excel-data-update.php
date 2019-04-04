@@ -20,12 +20,12 @@
 			$ProductsSheet =  json_encode($ProductsSheetData);
 			
 			$WroteAgoraExcelBak = file_put_contents(
-				__DIR__ . '/data/agora-excel/data' . date('_Y_m_d_H_i_s') . '.json',
+				__DIR__ . '/data/agora-data/data' . date('_Y_m_d_H_i_s') . '.json',
 				$ProductsSheet
 			);
 
 			$WroteAgoraExcel = file_put_contents(
-				__DIR__ . '/data/agora-excel/data.json',
+				__DIR__ . '/data/agora-data/data.json',
 				$ProductsSheet
 			);
 

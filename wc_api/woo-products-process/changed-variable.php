@@ -25,7 +25,7 @@ function poeticsoft_api_woo_products_process_changed_variable ($Products){
 			/* CHANGES */
 
 			$CVP->set_name($Product['name']);
-			$SP->set_category_ids($Product['category_ids']);
+			$CVP->set_category_ids($Product['category_ids']);
 
 			/* Images */
 

@@ -22,12 +22,13 @@ function poeticsoft_api_woo_products_process_changed_variation ($Products){
 
 			$CPV = wc_get_product($VariationId);
 
-			/* CHANGES */
+			/* Changes */
 
 			$CPV->set_regular_price($Product['regular_price']);
 			$CPV->set_description($Product['name']);
 
-			$NewQuantity = wc_update_product_stock($CPV, intval($Product['stock_quantity']));
+			$StockQuantity = $Product['actual_stock_quantity'] ? $Product['actual_stock_quantity'] : 0;
+			$NewQuantity = wc_update_product_stock($CPV, intval($StockQuantity));
 
 			/* Images */
 

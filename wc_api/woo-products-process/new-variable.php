@@ -29,9 +29,8 @@ function poeticsoft_api_woo_products_process_new_variable ($Products){
 			$NVP->set_catalog_visibility('visible');
 			$NVP->set_sku($Product['sku']);
 			$NVP->set_regular_price($Product['regular_price']); 
-			$NVP->set_manage_stock(true);
+			$NVP->set_manage_stock(false);
 			$NVP->set_category_ids($Product['category_ids']);
-			$NVP->set_stock_quantity($Product['stock_quantity']);
 
 			/* Image */
 

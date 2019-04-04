@@ -16,6 +16,11 @@
 	ini_set('display_startup_errors', 1);
 	error_reporting(E_ALL);
 
+	/* WOO API 
+
+	Clave del cliente: ck_45186aec0cd50813e4c188f8622b07a81cc405c6
+	Clave secreta de cliente: cs_5cff74469f4bc5e8a839570889ee19b513d7ba41
+
 	/**
 	 * ROUTES
 	*/
@@ -34,6 +39,8 @@
 	require_once(dirname(__FILE__) . '/wc_api/woo-families-categories-update.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-agora-excel-data-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-agora-excel-data-update.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-agora-excel-stock-read.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-agora-excel-stock-update.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-images-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-images-upload.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-images-clean.php');
