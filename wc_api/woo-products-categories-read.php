@@ -29,7 +29,8 @@
 				array(
 					'id' => $ProductCategorie->term_id,
 					'parentId' => $ProductCategorie->parent,
-					'name' => $ProductCategorie->name
+					'name' => $ProductCategorie->name,
+					'slug' => $ProductCategorie->slug
 				)
 			);
 		};

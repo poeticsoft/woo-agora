@@ -18,12 +18,7 @@
 		$args = array(			
 			'numberposts' => -1,
 			'status' => 'publish' 
-		); 
-
-		function mapVariationGalleryImages($Image) {
-
-			return $Image['image_id'];
-		}
+		);
 
 		$WooProducts = wc_get_products($args);
 
@@ -93,11 +88,7 @@
 						'regular_price' => $ProductVariation['display_regular_price'],
 						'stock_quantity' => $ProductVariation['max_qty'] ? $ProductVariation['max_qty'] : 0,
 						'category_ids' => $ProductData['category_ids'],
-						'image_id' => $ProductVariation['image_id'],
-						'variation_gallery_images' => array_map(
-							'mapVariationGalleryImages', 
-							$ProductVariation['variation_gallery_images']
-						)
+						'image_id' => $ProductVariation['image_id']
 					);
 					$Attributes = $ProductVariation['attributes'];
 					$ProductVariationMapped['attributes'] = array();
