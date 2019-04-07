@@ -26,7 +26,7 @@
 				$CSP->set_regular_price($Product['regular_price']); 
 				$CSP->set_category_ids($Product['category_ids']);	
 			
-				$StockQuantity = $Product['actual_stock_quantity'] ? $Product['actual_stock_quantity'] : 0;
+				$StockQuantity = $Product['export_stock_quantity'] ? $Product['export_stock_quantity'] : 0;
 				$NewQuantity = wc_update_product_stock($CSP, intval($StockQuantity));
 	
 				/* Images */

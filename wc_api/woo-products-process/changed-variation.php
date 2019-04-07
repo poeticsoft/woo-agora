@@ -27,7 +27,7 @@ function poeticsoft_api_woo_products_process_changed_variation ($Products){
 			$CPV->set_regular_price($Product['regular_price']);
 			$CPV->set_description($Product['name']);
 
-			$StockQuantity = $Product['actual_stock_quantity'] ? $Product['actual_stock_quantity'] : 0;
+			$StockQuantity = $Product['export_stock_quantity'] ? $Product['export_stock_quantity'] : 0;
 			$NewQuantity = wc_update_product_stock($CPV, intval($StockQuantity));
 
 			/* Images */

@@ -26,7 +26,7 @@ function poeticsoft_api_woo_products_process_new_variation ($Products){
 				wc_get_product($VariationId)->delete();
 			}	
 			
-			$StockQuantity = $Product['actual_stock_quantity'] ? $Product['actual_stock_quantity'] : 0;
+			$StockQuantity = $Product['export_stock_quantity'] ? $Product['export_stock_quantity'] : 0;
 
 			$NPV = new WC_Product_Variation();
 			$NPV->set_parent_id($ParentId);

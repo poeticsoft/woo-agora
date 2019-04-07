@@ -24,7 +24,7 @@ function poeticsoft_api_woo_products_process_new_simple ($Products){
 
 			$NSP = new WC_Product();
 			
-			$StockQuantity = $Product['actual_stock_quantity'] ? $Product['actual_stock_quantity'] : 0;
+			$StockQuantity = $Product['export_stock_quantity'] ? $Product['export_stock_quantity'] : 0;
 
 			$NSP->set_name($Product['name']);
 			$NSP->set_status("publish");
