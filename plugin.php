@@ -33,6 +33,8 @@
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-color-size-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-color-size-update.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-categories-read.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-products-family-read.php');
+	require_once(dirname(__FILE__) . '/wc_api/woo-products-family-update.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-stock-read.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-products-stock-update.php');
 	require_once(dirname(__FILE__) . '/wc_api/woo-families-categories-read.php');

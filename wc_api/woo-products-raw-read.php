@@ -24,12 +24,10 @@
 			$ProductType = $WooProduct->get_type();
 			$ProductData['type'] = $ProductType;
 
-			/*
 			array_push(
 				$data->Data,
 				$ProductData
 			);
-			*/
 
 			if($ProductType == 'variable') {
 				

@@ -33,6 +33,11 @@ function poeticsoft_api_woo_products_process_changed_variable ($Products){
 
 				$CVP->set_image_id($Product['image_id']);
 			}
+	
+			if(count($Product['gallery_image_ids'] > 0)) {
+
+				$CVP->set_gallery_image_ids($Product['gallery_image_ids']);
+			}
 
 			/* Attributes */
 

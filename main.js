@@ -512,12 +512,16 @@ var APP = angular.module('APP', [ 'kendo.directives' ]);
 APP.factory(
 	'Categories', 
 function (
-	Notifications
+	$http,
+	$q,
+	Notifications,
+	Loader
 ) {
 
 	var Self = {};
 
-	/* WEB CATEGORIES */
+	/* -----------------------------------------------------------------------------
+		WEB CATEGORIES */
 	
 	var TreeData; // Buffer for construct tree		
 
@@ -544,11 +548,12 @@ function (
 
 		return Nodes;
 	}
-	
+
+	Self.UncategorizedId = null;	
 	Self.RemoteDS = new kendo.data.DataSource ({
 		transport: {
 			read: {
-				url: '/wp-json/poeticsoft/woo-products-categories-read',
+				url: '/wp-json/poeticsoft/woo-products-categories-read', // Actual woo commerce categories 
 				type: 'GET',
 				dataType: 'json'
 			}
@@ -559,7 +564,8 @@ function (
 				fields: {
 					'id': { type: 'number', editable: false },
 					'parentId': { type: 'string', editable: false },
-					'name': { type: 'string', editable: false }
+					'name': { type: 'string', editable: false },
+					'slug': { type: 'string', editable: false }
 				}
 			},
 			data: 'Data',
@@ -573,12 +579,20 @@ function (
 		requestEnd: function(E) {
 
 			TreeData = E.response.Data;
+			var Uncategorized = TreeData.find(function(C) {
+
+				return C.slug == 'uncategorized';
+			});
+			Uncategorized && (Self.UncategorizedId = Uncategorized.id);
 			Self.DS.data(constructTree()); // Feed Self.DS
+
+			Loader.ready('ProductsCategories');
 		}
 	});
 	Self.RemoteDS.read();
 	
-	// Data source for FamiliesListViewConfig in Categories directive
+	/* -----------------------------------------------------------------------------
+		Data source for FamiliesListViewConfig in Categories directive */
 
 	Self.RelationsDS = new kendo.data.DataSource ({
 		transport: {
@@ -607,15 +621,17 @@ function (
 		requestEnd: function(E) {			
 
 			Self.updateFamiliesCategories();
+			Loader.ready('FamiliesCategories');
 		}
 	});
-	Self.RelationsDS.read();
+
+	/* -----------------------------------------------------------------------------
+		Families loaded from Agora excel*/ 
 
 	Self.updateFamilies = function(FamiliesList) {
 
 		// Remove inexistent families
 
-		var RemoveIndex = [];
 		Self.RelationsDS
 		.data()
 		.toJSON()
@@ -656,6 +672,85 @@ function (
 		});
 	}
 
+	Self.saveRelations = function() {		
+
+		var $Q = $q.defer();
+		
+		$http.post(
+			'/wp-json/poeticsoft/woo-families-categories-update',
+			Self.RelationsDS.data().toJSON()
+		)
+		.then(function(Response) {
+
+			var Code = Response.data.Status.Code;
+			if(Code == 'KO'){ 
+
+				return Notifications.show({ errors: Response.data.Status.Reason });
+			}
+
+			Self.updateFamiliesCategories();
+
+			$Q.resolve();
+		});
+
+		return $Q.promise;
+	}	
+
+	/* -----------------------------------------------------------------------------
+		Products Family */ 
+
+	Self.ProductsFamily = {};
+	
+	Self.loadProductsFamily = function() {		
+
+		var $Q = $q.defer();
+		
+		$http.get(
+			'/wp-json/poeticsoft/woo-products-family-read'
+		)
+		.then(function(Response) {
+
+			var Code = Response.data.Status.Code;
+			if(Code == 'KO'){ 
+
+				return Notifications.show({ errors: Response.data.Status.Reason });
+			}
+
+			Self.ProductsFamily = Response.data.Data;
+
+			Loader.ready('ProductsFamily');
+
+			$Q.resolve();
+		});
+
+		return $Q.promise;
+	}
+	Self.loadProductsFamily();
+
+	Self.saveProductsFamily = function() {		
+
+		var $Q = $q.defer();
+		
+		$http.post(
+			'/wp-json/poeticsoft/woo-products-family-update',
+			Self.ProductsFamily
+		)
+		.then(function(Response) {
+
+			var Code = Response.data.Status.Code;
+			if(Code == 'KO'){ 
+
+				Notifications.show({ errors: Response.data.Status.Reason });
+			}
+
+			$Q.resolve();
+		});
+
+		return $Q.promise;
+	}	
+
+	/* ----------------------------------------------------------------------------- */ 
+
 	return Self;
 });
 	
@@ -668,33 +763,51 @@ function (
 	$q, 
 	$timeout,
 	$rootScope,
-	Notifications
+	Stock,
+	Images,
+	Categories,
+	Notifications,
+	Loader
 ) {
 
 	var Self = {};
 
-	/* Local data for process */
+	/* -------------------------------------------------------------------------
+		 Local data for process 
+	*/
 
-	Self.WebData = {};
-	Self.NewData = {};
-	Self.TempData = {};	
+	Self.WebData = {}; 		// Products loaded from web
+	Self.AgoraData = {}; 	// Products from agora export 
+	Self.TempData = {};		// Process buffer
+
+	/* -------------------------------------------------------------------------
+		 Calculate changes betweeen web data and actual agora data + stock 
+	*/
 
 	var PlainCompares = [
 		'parent_sku',
 		'type',
 		'name',
 		'image_id',
-		'sale_price',
-		'stock_quantity'
+		'sale_price'
 	]
 
 	var ArrayCompares = [
 		'category_ids',
-		'gallery_image_ids',
-		'variation_gallery_images'
+		'gallery_image_ids'
 	]
 
-	function updateData(SKU) {
+	function calculateAgoraWebChanges(SKU) {
+
+		/*
+		console.log('----------------------------------------------------');
+		console.log(Self.WebData[SKU]); 
+		console.log(Self.AgoraData[SKU]);
+		*/
+
+		/* Changes array */
+
+		Self.TempData[SKU].changes = [];
 
 		/* Plain */
 
@@ -702,11 +815,12 @@ function (
 
 			if(
 				Self.WebData[SKU][Field] != 
-				Self.NewData[SKU][Field]
+				Self.AgoraData[SKU][Field]
 			) {
 
-				Self.TempData[SKU][Field] = Self.NewData[SKU][Field];
+				Self.TempData[SKU][Field] = Self.AgoraData[SKU][Field];
 				Self.TempData[SKU].status = 'changed';
+				Self.TempData[SKU].changes.push(Field);
 			}
 		});
 
@@ -714,38 +828,333 @@ function (
 
 		ArrayCompares.forEach(function(Field) {
 
-			if(
-				[].concat(Self.WebData[SKU][Field]).sort().join() != 
-				[].concat(Self.NewData[SKU][Field]).sort().join()
-			) {
+			var WebArray = [].concat(Self.WebData[SKU][Field]).sort().join();
+			var AgoraArray = [].concat(Self.AgoraData[SKU][Field]).sort().join();
 
-				Self.TempData[SKU][Field] = Self.NewData[SKU][Field];
+			if(WebArray != AgoraArray) {
+
+				Self.TempData[SKU][Field] = Self.AgoraData[SKU][Field];
 				Self.TempData[SKU].status = 'changed';
+				Self.TempData[SKU].changes.push(Field);
 			}
 		});
 
 		/* Attributes */
 
-		if(
-			Self.WebData[SKU].attributes.color != 
-			Self.NewData[SKU].attributes.color
-		) {
+		var WebColor = Self.WebData[SKU].attributes.color.split('|').sort().join('|');
+		var AgoraColor = Self.AgoraData[SKU].attributes.color.split('|').sort().join('|');
 
-			Self.TempData[SKU].attributes.color = Self.NewData[SKU].attributes.color;
+		if(WebColor != AgoraColor) {
+
+			Self.TempData[SKU].attributes.color = AgoraColor;
 			Self.TempData[SKU].status = 'changed';
+			Self.TempData[SKU].changes.push('color');
 		}		
 
-		if(
-			Self.WebData[SKU].attributes.size != 
-			Self.NewData[SKU].attributes.size
-		) {
+		var WebSize = Self.WebData[SKU].attributes.size.split('|').sort().join('|');
+		var AgoraSize = Self.AgoraData[SKU].attributes.size.split('|').sort().join('|');
 
-			Self.TempData[SKU].attributes.size = Self.NewData[SKU].attributes.size;
+		if(WebSize !=  AgoraSize) {
+
+			Self.TempData[SKU].attributes.size = AgoraSize;
 			Self.TempData[SKU].status = 'changed';
+			Self.TempData[SKU].changes.push('size');
+		}
+
+		/* Stock */
+
+		calculateStock(SKU);
+	}	
+
+	/* -------------------------------------------------------------------------
+		Update stock in actual products
+	*/
+
+	function calculateStock(SKU) {							
+
+		if(Self.TempData[SKU].type == 'variable') {
+
+			Self.TempData[SKU].stock_quantity = '';
+			Self.TempData[SKU].last_stock_quantity = '';
+			Self.TempData[SKU].import_stock_quantity = '';
+			Self.TempData[SKU].export_stock_quantity = '';
+			
+		} else {
+
+			var StockQuantity = Self.WebData[SKU] ? Self.WebData[SKU].stock_quantity : null;
+
+			Self.TempData[SKU].stock_quantity = StockQuantity;
+			Self.TempData[SKU].last_stock_quantity = (Stock.OldData[SKU] && Stock.OldData[SKU].Value) || '-';
+			Self.TempData[SKU].import_stock_quantity = (Stock.NewData[SKU] && Stock.NewData[SKU].Value) || '-';
+			Self.TempData[SKU].export_stock_quantity = Self.TempData[SKU].stock_quantity ?
+																										Self.TempData[SKU].import_stock_quantity - 
+																										(
+																												Self.TempData[SKU].last_stock_quantity - 
+																												Self.TempData[SKU].stock_quantity
+																										) 
+																										:
+																										Self.TempData[SKU].import_stock_quantity;	
+
+			if(
+				Self.TempData[SKU].stock_quantity != Self.TempData[SKU].export_stock_quantity
+			) {
+					
+				Self.TempData[SKU].status = 'changed';
+				Self.TempData[SKU].changes = Self.TempData[SKU].changes || [];
+				Self.TempData[SKU].changes.push('stock');
+			}
+
+			if(
+				Self.TempData[SKU].import_stock_quantity != Self.TempData[SKU].export_stock_quantity
+			) {
+					
+				Self.TempData[SKU].changes = Self.TempData[SKU].changes || [];
+				Self.TempData[SKU].changes.push('exportstock');
+			}
+
+			if(Self.TempData[SKU].export_stock_quantity < 0) {
+
+				Self.CanUpdateWeb = false;
+			}			
+		}	
+	}
+
+	/* -------------------------------------------------------------------------
+		Update stock in actual products
+	*/
+
+	Self.CanUpdateWeb = true; // Cannot update web if export stock is negative;
+	Self.updateStock = function() {
+
+		Self.CanUpdateWeb = true;
+
+		Object.keys(Self.TempData)
+		.forEach(calculateStock);		
+
+		visualize();
+	}
+
+	/* -------------------------------------------------------------------------
+		Update categories when relations change
+	*/
+
+	function calculateCategories(SKU) {
+
+		var Type = Self.TempData[SKU].type;
+		var NewCategoryIds;
+
+		Self.TempData[SKU].changes = Self.TempData[SKU].changes || [];
+
+		switch(Type) {
+
+			case 'simple':
+
+				var ProductFamily = Categories.ProductsFamily[SKU];  
+				NewCategoryIds = Categories.FamilyCategories[ProductFamily] || [Categories.UncategorizedId];
+
+				break;
+
+			case 'variable':
+
+				var ProductVariations = _.filter(Self.TempData, function(Product) {
+
+					return Product.parent_sku == SKU;
+				});
+
+				NewCategoryIds = ProductVariations.reduce(function(Accumulate, Variation) {
+
+					var VariationFamily = Categories.ProductsFamily[Variation.sku]; 
+					var VariationCategories = Categories.FamilyCategories[VariationFamily] || [Categories.UncategorizedId];          
+					Accumulate = _.union(Accumulate, VariationCategories);
+	
+					return Accumulate;
+	
+				}, []);
+
+				break;
+		}	
+
+		var OldCategories = [].concat(Self.TempData[SKU].category_ids).sort().join();
+		var NewCategories = [].concat(NewCategoryIds).sort().join();
+
+		if(OldCategories != NewCategories) {					
+				
+			Self.TempData[SKU].category_ids = NewCategoryIds;
+			Self.TempData[SKU].status = 'changed';
+			Self.TempData[SKU].changes.push('category_ids');
 		}
 	}
 
-	Self.processDifferences = function() {
+	Self.updateCategories = function() {
+
+		Object.keys(Self.TempData)
+		.forEach(calculateCategories);
+
+		/* visualize result */
+
+		visualize();
+	}	
+
+	/* -------------------------------------------------------------------------
+		Update images when upload new images
+	*/
+
+	function calculateImages(SKU) {
+
+		var Type = Self.TempData[SKU].type;
+		var ProductImages = Images.Group[SKU] && 
+												Images.Group[SKU].items &&
+												Images.Group[SKU].items.map(function(Image) {
+
+													return Image.attid;
+												});
+		var NewImageId;
+		var NewGalleryImageIds = [];
+
+		Self.TempData[SKU].changes = Self.TempData[SKU].changes || [];
+
+		switch(Type) {
+
+			case 'simple':
+			
+				NewImageId = ProductImages && 
+										(ProductImages.length > 0 ) && 
+										 ProductImages.shift();
+				NewGalleryImageIds = ProductImages && 
+														 ProductImages.length > 0 ? 
+															 ProductImages
+															 : 
+															 [];
+
+				break;
+
+			case 'variable':
+
+				var ProductVariations = _.filter(Self.TempData, function(Product) {
+
+					return Product.parent_sku == SKU;
+				});
+				var ProductImages = ProductVariations.reduce(function(Accumulate, Variation) {
+
+					var VariationImages = Images.Group[Variation.sku];
+					
+					if(VariationImages) {
+
+						var VariationImagesIds = VariationImages
+						.items
+						.map(
+							function(Image) { 
+								return Image.attid;
+							}
+						);
+
+						Accumulate = Accumulate.concat(VariationImagesIds);
+					}
+
+					return Accumulate;
+
+				}, []);
+
+				if(ProductImages.length > 0) {
+
+					NewImageId = ProductImages.shift();
+				}
+
+				if(ProductImages.length > 0) {
+
+					NewGalleryImageIds = _.unique(NewGalleryImageIds.concat(ProductImages));
+				}
+
+				/* Variations */	
+					
+					/*					
+
+				_.filter(Self.TempData, function(Product) {
+					
+					return Product.parent_sku == SKU;
+				})
+				.forEach(function(Variation) {
+
+					var VariationImages = Images.Group[Variation.sku];
+					var VariationImagesIds;			
+					if(VariationImages) {
+			
+						VariationImagesIds = VariationImages
+						.items
+						.map(
+							function(Image) { 
+								return Image.attid;
+							}
+						);
+					}
+			
+					// Pick only first for variation rest for product gallery
+			
+					if(VariationImagesIds && VariationImagesIds.length > 0) {
+			
+						var NewVariationImageId = VariationImagesIds.shift();	
+
+						if(Variation.image_id != NewVariationImageId) {	
+
+							console.log('sdf ' + Variation.image_id + ' ' + NewVariationImageId);
+
+							Variation.changes = Variation.changes || [];					
+							Variation.image_id = NewVariationImageId;
+							Variation.status = 'changed';
+							Variation.changes.push('image_id');
+						}
+			
+						if(VariationImagesIds.length > 0) {
+			
+							NewGalleryImageIds = _.unique(NewGalleryImageIds.concat(VariationImagesIds));
+						}
+					}
+				});
+					*/
+
+				break;
+		}	
+
+		if(
+			Type == 'simple' || 
+			Type == 'variable'
+		) {
+
+			if(NewImageId != Self.TempData[SKU].image_id) {					
+					
+				Self.TempData[SKU].image_id = NewImageId;
+				Self.TempData[SKU].status = 'changed';
+				Self.TempData[SKU].changes.push('image_id');
+			}	
+
+			var OldGalleryImages = [].concat(Self.TempData[SKU].gallery_image_ids).sort().join();
+			var NewGalleryImages = [].concat(NewGalleryImageIds).sort().join();
+
+			if(OldGalleryImages != NewGalleryImages) {					
+					
+				Self.TempData[SKU].gallery_image_ids = NewGalleryImageIds;
+				Self.TempData[SKU].status = 'changed';
+				Self.TempData[SKU].changes.push('gallery_image_ids');
+			}
+		}
+	}
+
+	Self.updateImages = function() {
+
+		Object.keys(Self.TempData)
+		.sort()
+		.forEach(calculateImages);
+
+		/* visualize result */
+
+		visualize();
+	}
+
+	/* -------------------------------------------------------------------------
+		 Update process buffer with data from agora excel 
+	*/
+
+	Self.updateFromAgora = function() {
 
 		Self.TempData = {};
 
@@ -755,14 +1164,14 @@ function (
 		.forEach(function(SKU) {
 
 			Self.TempData[SKU] = Self.WebData[SKU];
-			if(!Self.NewData[SKU]) { Self.TempData[SKU].status = 'deleted';  }
+			if(!Self.AgoraData[SKU]) { Self.TempData[SKU].status = 'deleted';  }
 		});
 
-		Object.keys(Self.NewData)
+		Object.keys(Self.AgoraData)
 		.forEach(function(SKU) {
 
-			Self.TempData[SKU] = Self.NewData[SKU];
-			Self.TempData[SKU].status = 'updated';			
+			Self.TempData[SKU] = Self.AgoraData[SKU];
+			Self.TempData[SKU].status = 'updated';
 
 			/* Mark as new if not in web */
 
@@ -770,34 +1179,46 @@ function (
 
 			/* Update if changed */
 
-			else { updateData(SKU); }
-
+			else { calculateAgoraWebChanges(SKU); }
+			
 		});
 
 		/* visualize result */
 
-		var TempData = [];
+		visualize();
+	}
+
+	/* -------------------------------------------------------------------------
+		Converts TempData in an array for consuming in Kendo Grid
+	*/
+
+	function visualize() {
+
+		var VisualizeData = [];
+
 		Object.keys(Self.TempData)
 		.forEach(function(SKU) {
 
-			TempData.push(Self.TempData[SKU]);
+			VisualizeData.push(Self.TempData[SKU]);
 		});		
 
-		TempData.sort(function(a, b) {
+		VisualizeData.sort(function(a, b) {
 
 			if (a.sku < b.sku) { return -1; }
 			if (a.sku > b.sku) { return 1; };
 			return 0;
 		});
 
-		Self.DS.read({ data: TempData });
+		Self.DS.read({ data: VisualizeData });
 
 		$rootScope.$broadcast('productschanged');
-	}
+	}			
 
-	/* Data structure for visualization */
+	/* -------------------------------------------------------------------------
+		Data structure for kendo grid
+	*/
 
-	Self.DS = new kendo.data.TreeListDataSource ({
+	Self.DSConfig = {
 		transport: {
 			read: function(Op) {
 
@@ -816,6 +1237,8 @@ function (
 					'name': { type: 'string', editable: false },
 					'category_ids': [],	
 					'sale_price': { type: 'number', editable: false },
+					/* Mark */	
+					'status': { type: 'string', editable: false }, // 'updated', 'deleted', 'new', 'changed'
 					/* Calculated from ColorSize */
 					'attributes': {
 						'color': '',
@@ -823,12 +1246,14 @@ function (
 					},
 					/* Calculated from Images */
 					'image_id': { type: 'number', editable: false },
-					'gallery_image_ids': [],					
-					'variation_gallery_images': [],	
+					'gallery_image_ids': [],
 					/* Calculated from Stock */	
 					'stock_quantity': { type: 'number', editable: false },
-					/* Mark */	
-					'status': { type: 'string', editable: false } // 'updated', 'deleted', 'new', 'changed'
+					'last_stock_quantity': { type: 'number', editable: false }, 
+					'import_stock_quantity': { type: 'number', editable: false }, 
+					'export_stock_quantity': { type: 'number', editable: false },
+					/* Changes list */
+					'changes': []
 				},
 				expanded: true
 			}
@@ -837,9 +1262,13 @@ function (
 			field: 'sku', 
 			dir: 'asc' 
 		}
-	});
+	};
 
-	/* Load Web Products Data */
+	Self.DS = new kendo.data.TreeListDataSource (Self.DSConfig);
+
+	/* -------------------------------------------------------------------------
+		Load Web Products Data
+	*/
 
 	Self.loadFromWeb = function() {
 
@@ -859,22 +1288,37 @@ function (
 				}			
 
 				Self.WebData = {};
+				Self.AgoraData = {};
+				Self.TempData = {};
+
 				Response.data.Data.forEach(function(Product) {
 
 					Product.status = 'updated';
-					Self.WebData[Product.sku] = Product;				
+					Product.parent_sku = Product.parent_sku || null; // Tree View
+					Self.WebData[Product.sku] = Product;
 				});
+										
+				Self.AgoraData = JSON.parse(JSON.stringify(Self.WebData));						
+				Self.TempData = JSON.parse(JSON.stringify(Self.WebData));
 
-				/* Visualize */
+				Object.keys(Self.TempData)
+				.sort()
+				.forEach(function(SKU) {
+					
+					calculateStock(SKU);
+					calculateImages(SKU);
+				});	
 
-				Self.DS.read({ data: Response.data.Data });
+				visualize();
 			}
 		);
 
 		return $Q.promise;
 	}
 
-	/* Save conversion to web and update woo products */
+	/* -------------------------------------------------------------------------
+		Save conversion to web and update woo products
+	*/
 
 	var ProcessFragments = [
 		'deleted_variation',	
@@ -892,9 +1336,13 @@ function (
 
 		var $Q = $q.defer();
 
-		/* same as Self.TempData but may be in a future grid will be editable */
+		/* Same as Self.TempData but may be in a future grid will be editable */
 
-		var ProductsData = Self.DS.data().toJSON();
+		var ProductsData = Self.DS.data().toJSON();		
+        
+		/* Stock excel update */
+
+		$rootScope.$broadcast('updateexcelstock', ProductsData);
 		
 		/* Generate queue */
 
@@ -928,9 +1376,23 @@ function (
 
 		function processQueue() {
 
-			if(Queue.length == 0) {
+			if(Queue.length == 0) {	
 
-				return $Q.resolve();
+				$rootScope.$emit('notifydialog', { text: 'Queue finished, updating state...' });
+
+				return $timeout(function() {
+
+					Self.loadFromWeb()
+					.then(function() {						
+
+						$rootScope.$emit('notifydialog', { text: 'State updated refreshing data...' });
+
+						$timeout(function() {
+					
+							$Q.resolve();
+						}, 200);
+					});
+				}, 200);
 			}
 
 			var Chunk = Queue.shift();
@@ -941,11 +1403,9 @@ function (
 			)
 			.then(function(Response) {
 			
-				if(Response.data.Status.Code == 'KO') {						
+				if(Response.data.Status.Code == 'KO') {	
 
-					$Q.resolve();				
-
-					return Notifications.show({ errors: Response.data.Status.Reason });	
+					Notifications.show({ errors: Response.data.Status.Reason });	
 				}
 				
 				$rootScope.$emit('notifydialog', { text: Response.data.Status.Message }); 
@@ -954,7 +1414,19 @@ function (
 			});
 		}
 
-		processQueue();		
+		if(Queue.length > 0) {
+			
+			processQueue();
+
+		}	else {
+			
+			$rootScope.$emit('notifydialog', { text: 'Nothing to update...' });
+
+			$timeout(function() {
+				
+				$Q.resolve();
+			}, 200);
+		}
 
 		return $Q.promise;
 	}
@@ -974,12 +1446,17 @@ function (
 			}
 
 			Self.FootPrint = Response.data.Data;
+
+			Loader.ready('FieldsFootPrint');
 		}
 	);
 
-	/* Load last products processed data */
+	/* Load last products processed data when resources ready */
 	
-	Self.loadFromWeb();
+	$rootScope.$on('loader_productsexcelresources_ready', function() {
+
+		Self.loadFromWeb();
+	});
 
 	return Self;
 });
@@ -988,7 +1465,8 @@ function (
 APP.factory(
 	'Images', 
 function (
-	Notifications
+	Notifications,
+	Loader
 ) {
 
 	var Self = {};
@@ -1064,6 +1542,10 @@ function (
 					items: G.items
 				}
 			});
+		},
+		requestEnd: function(E) {			
+
+			Loader.ready('Images');
 		}
 	});
 
@@ -1075,7 +1557,8 @@ function (
 APP.factory(
 	'ColorSize', 
 function (
-	$http
+	$http,
+	Loader
 ) {
 
 	var Self = {};
@@ -1090,11 +1573,35 @@ function (
 
 			Self.Data = Response.data.Data; 
 
+			Loader.ready('ColorSize');
+
 		} else {
 
 			return Notifications.show({ errors: Response.data.Status.Reason });
 		}
 	});
+
+	Self.save = function() {
+
+		var $Q = $q.defer();
+
+		$http.post(
+			'/wp-json/poeticsoft/woo-products-color-size-update',
+			ColorSize.Data
+		)
+		.then(function(Response) {
+
+			var Code = Response.data.Status.Code;
+			if(Code == 'KO'){
+
+				$rootScope.$emit('notifydialog', { text: 'Error: ' + Response.data.Status.Reason }); 
+			}    
+			
+			$Q.resolve();
+		});
+		
+		return $Q.promise;
+	}
 
 	return Self;
 });
@@ -1104,7 +1611,8 @@ function (
 APP.factory(
 	'ParentSku', 
 function (
-	$http
+	$http,
+	Loader
 ) {
 
 	var Self = {};
@@ -1119,11 +1627,78 @@ function (
 
 			Self.Data = Response.data.Data;
 
+			Loader.ready('ParentSKU');
+
 		} else {
 
 			return Notifications.show({ errors: Response.data.Status.Reason });
 		}
 	});
+
+	return Self;
+});
+	
+/* datasource-stock.js */
+
+APP.factory(
+	'Stock', 
+function (
+	$http,
+	$q,
+	$rootScope,
+	Loader
+) {
+
+	var Self = {};
+
+	Self.OldData = {};
+	Self.OldReady = false;
+	Self.NewData = {};
+	Self.NewReady = false;	
+
+	$http.get('/wp-json/poeticsoft/woo-products-stock-read')
+	.then(function(Response) {
+
+		var Code = Response.data.Status.Code;
+		if(Code == 'OK'){ 
+
+			Self.OldData = Response.data.Data;
+			Self.OldReady = true;
+
+			$rootScope.$broadcast('stockready');
+
+			Loader.ready('ProductsStock');
+
+		} else {
+
+			return Notifications.show({ errors: Response.data.Status.Reason });
+		}
+	});
+
+	Self.saveState = function() {		
+
+		var $Q = $q.defer();
+		Self.OldData = JSON.parse(JSON.stringify(Self.NewData)); // Easy clone
+
+		$http.post(
+			'/wp-json/poeticsoft/woo-products-stock-update',
+			Self.OldData
+		)
+		.then(function(Response) {
+	
+			var Code = Response.data.Status.Code;
+			if(Code == 'OK'){ 
+	
+			} else {
+	
+				return Notifications.show({ errors: Response.data.Status.Reason });
+			}
+
+			$Q.resolve();
+		});
+
+		return $Q.promise;
+	}
 
 	return Self;
 });
@@ -1168,7 +1743,7 @@ function (
 			parent_sku: Product.Parent,
 			type: Product.Type,
 			name: Product.Producto,
-			category_ids: Product.Categories || [],
+			category_ids: Product.Categories,
 			regular_price: Product['Precio General'] || 0,
 			/* Calculated from ColorSize */
 			attributes: {
@@ -1177,10 +1752,7 @@ function (
 			},
 			/* Calculated from Images */
 			image_id: Product.ImageId,
-			gallery_image_ids: Product.GalleryImageIds || [],
-			variation_gallery_images: Product.VariationGalleryImages ||[],				
-			/* Calculated from Stock */
-			stock_quantity: 1
+			gallery_image_ids: Product.GalleryImageIds || []
 		};
 	}
 
@@ -1189,6 +1761,7 @@ function (
 	function addSimpleProduct(Group) {
 
 		var Product = Group[0];
+
 		var SKU = Product['Código Barras'];	
 		var ProductImages = Images.Group[SKU] && 
 												Images.Group[SKU].items &&
@@ -1200,6 +1773,7 @@ function (
 		Product.Type = 'simple';
 		Product.Producto = formatName(Product.Producto);
 		Product.Categories = Categories.FamilyCategories[Product.Familia] || [];
+		(Product.Categories.length == 0) && (Product.Categories = [Categories.UncategorizedId]);
 		Product.Attributes = {
 			Color: ColorSize.Data[SKU] && ColorSize.Data[SKU].color || '',
 			Size: ColorSize.Data[SKU] && ColorSize.Data[SKU].size || ''
@@ -1211,7 +1785,7 @@ function (
 														 (ProductImages.length > 0 ) &&
 															ProductImages;
 
-		Products.NewData[SKU] = formatProduct(Product);
+		Products.AgoraData[SKU] = formatProduct(Product);
 	}
 
 	/* Add variable product */
@@ -1247,10 +1821,17 @@ function (
 
 		/* Categories as unique from variations (because family in variations can change?) */
 
-		Product.Categories = _.union(Group.map(function(P) {
+		Product.Categories = 	Group.reduce(function(Accumulate, Variation) {
 
-			return Categories.FamilyCategories[P.Familia] || [];
-		}));
+			var VariationCategories = Categories.FamilyCategories[Variation.Familia] || [];
+
+			Accumulate = _.union(Accumulate, VariationCategories);
+
+			return Accumulate;
+
+		}, []);
+
+		(Product.Categories.length == 0) && (Product.Categories = [Categories.UncategorizedId]);
 
 		/* Attributes as uniq sum of color & Size of variations */
 
@@ -1258,11 +1839,6 @@ function (
 			Color: _.uniq(Group.map(function(P) { return P.Color; })).join('|'),
 			Size: _.uniq(Group.map(function(P) { return P.Size; })).join('|')
 		}
-
-		/*
-			Image as first image from first variation 
-			TODO remove from variations?
-		*/
 
 		var GroupImages = Group.reduce(function(Accumulate, Variation) {
 
@@ -1288,26 +1864,34 @@ function (
 
 		if(GroupImages.length > 0) {
 
-			Product.ImageId = GroupImages[0];
+			Product.ImageId = GroupImages.shift();
+		}
+
+		Product.GalleryImageIds = [];
+
+		if(GroupImages.length > 0) {
+
+			Product.GalleryImageIds = Product.GalleryImageIds.concat(GroupImages);
 		}
 
 		/* Add variable product */
 
-		Products.NewData[SKU] = formatProduct(Product);	
+		Products.AgoraData[SKU] = formatProduct(Product);	
 
 		/* Variations */
 
-		Group.forEach(addVariationProduct);
+		Group.forEach(addVariationProduct, Product);
 	}
 
 	/* Add variation product */
 
-	function addVariationProduct(Product) {
+	function addVariationProduct(Product, Parent) {
 
 		var SKU = Product['Código Barras'];
 
 		Product.Type = 'variation';		
 		Product.Producto = formatName(Product.Producto);
+		Product.Categories = Parent.Categories;
 		Product.Attributes = {
 			Color: Product.Color || '',
 			Size: Product.Size || ''
@@ -1316,8 +1900,7 @@ function (
 		/* Image as first image from group, rest are gallery images */
 
 		var VariationImages = Images.Group[SKU];
-		var VariationImagesIds;
-			
+		var VariationImagesIds;			
 		if(VariationImages) {
 
 			VariationImagesIds = VariationImages
@@ -1329,15 +1912,21 @@ function (
 			);
 		}
 
+		/* Pick only first fot variation rest for product gallery */
+
 		if(VariationImagesIds && VariationImagesIds.length > 0) {
 
 			Product.ImageId = VariationImagesIds.shift();
-			Product.VariationGalleryImages = VariationImagesIds;
+
+			if(VariationImagesIds.length > 0) {
+
+				Parent.GalleryImageIds = Parent.GalleryImageIds.concat(VariationImagesIds);
+			}
 		}
 
 		/* Add variation product */
 
-		Products.NewData[SKU] = formatProduct(Product);	
+		Products.AgoraData[SKU] = formatProduct(Product);
 	}
 
 	/* Excel rows to Product List Struct */
@@ -1346,6 +1935,8 @@ function (
 
 		var Families = {};
 		var ProductRows = [];
+
+		Categories.ProductsFamily = {};
 
 		/* Rows to array of row objects */
 
@@ -1361,18 +1952,27 @@ function (
 			var SKU = jQuery.trim(Row['Código Barras']);
 			if(SKU) {
 
-				if(Row.Familia) { Families[Row.Familia] = '';	} // Dummy for unique values
+				if(Row.Familia) { 
+					
+					Families[Row.Familia] = ''; // Dummy for unique values
+					Categories.ProductsFamily[SKU] = Row.Familia;
+				} 
+
 				ProductRows.push(Row);
 			} 
-		});
+		});		
+		
+		/* Products family relations TODO Errors */
+
+		Categories.saveProductsFamily();
 		
 		/* Categories based in family mapping */
 
 		Categories.updateFamilies(Object.keys(Families));
 
-		/* Initialize NewData array */
+		/* Initialize AgoraData array */
 
-		Products.NewData = {};
+		Products.AgoraData = {};
 
 		/* Group by Parent to create variations */
 
@@ -1412,7 +2012,7 @@ function (
 
 			$timeout(function() {
 
-				Products.processDifferences();
+				Products.updateFromAgora();
 
 				$rootScope.$broadcast('closedialog');
 
@@ -1477,6 +2077,98 @@ function (
 	return Self;
 });
         
+/* datasource-sku-parent.js */
+
+APP.factory(
+	'Loader', 
+function (
+	$rootScope
+) {
+
+	var Self = {};
+	var Debug = false;
+	var Loaded = {
+		'ProductsCategories': false,
+		'FamiliesCategories': false,
+		'ColorSize': false,
+		'MaxUploadSize': false,
+		'Images': false,
+		'ProductsStock': false,
+		'FieldsFootPrint': false,
+		'ParentSKU': false,
+		'ExcelStock': false,
+		'ExcelAgora': false,
+		'ProductsFamily': false
+	};
+	var Done = {
+		'ProductsResources': false,
+		'ExcelResources': false,
+		'ExcelAgora': false,
+		'ExcelStock': false
+	}
+
+	function done(Key) {
+
+		if(!Done[Key]) {
+
+			Done[Key] = true;
+
+			if(Debug) console.log('* loader_' + Key.toLowerCase() + '_ready');
+			$rootScope.$broadcast('loader_' + Key.toLowerCase() + '_ready');
+		}
+	}
+
+	function check() {
+
+		/* ------------------------------------------------------------
+			Loads */
+
+		// ------------------------------
+		// Products Resources
+
+		if(
+			Loaded['MaxUploadSize'] &&
+			Loaded['ProductsCategories'] &&
+			Loaded['FamiliesCategories'] &&
+			Loaded['ColorSize'] &&
+			Loaded['MaxUploadSize'] &&
+			Loaded['Images'] &&
+			Loaded['ProductsStock'] && 
+			Loaded['ProductsFamily']
+		) { done('ProductsResources'); }
+
+		// ------------------------------
+		// Agora Excel Resources
+
+		if(
+			Loaded['FieldsFootPrint'] &&
+			Loaded['ParentSKU'] &&
+			Loaded['ExcelStock']
+		) { done('ExcelResources'); }
+
+		/* ------------------------------------------------------------
+			Dones */
+
+		// ------------------------------
+		// Agora excel & products
+		
+		if(
+			Done['ProductsResources'] && 
+			Done['ExcelResources']
+		) { done('ProductsExcelResources'); }
+	}
+
+	Self.ready = function(Key) {
+
+		if(Debug) console.log('Loaded ' + Key);
+		$rootScope.$emit('notifydialog', { text: 'Loaded ' + Key });
+		Loaded[Key] = true;
+		check();
+	}	
+
+	return Self;
+});
+	
 /* utils.js */
 
 APP.factory(
@@ -1536,10 +2228,17 @@ function() {
 		resize();		
 
 		$timeout(function() {
+
+			/* Load process */
 						
 			$rootScope.$broadcast('opendialog', {
 				Title: 'Loading data...'
 			});
+		});
+
+		$rootScope.$on('loader_products_excel_ready', function() {
+
+			$rootScope.$broadcast('closedialog');
 		});
 	}
 
@@ -1551,22 +2250,31 @@ function() {
 		template: `<div class="poeticsoft-woo-agora">
 			<div kendo-tab-strip>
 				<ul>
-					<!-- li>Color Size</li -->
-					<li>Agora</li>
 					<li class="k-state-active">Web</li>
-				</ul>                      
-				<!-- poeticsoft-woo-agora-color-size></poeticsoft-woo-agora-color-size -->                 
-				<poeticsoft-woo-agora-excel></poeticsoft-woo-agora-excel> 
+					<li>Agora</li>
+				</ul>
 				<div class="Web">
 					<div kendo-tab-strip>
 						<ul>
-							<li class="k-state-active">Products</li>
+							<li>Products</li>
 							<li>Categories</li>
-							<li>Images</li>
+							<li class="k-state-active">Images</li>
 						</ul>
 						<poeticsoft-woo-agora-products></poeticsoft-woo-agora-products>                        
 						<poeticsoft-woo-agora-categories></poeticsoft-woo-agora-categories>
 						<poeticsoft-woo-agora-images></poeticsoft-woo-agora-images>
+					</div>
+				</div> 
+				<div class="Agora"> 
+					<div kendo-tab-strip>
+						<ul>
+							<!-- li>Color Size</li -->
+							<li>Products</li>
+							<li class="k-state-active">Stock</li>
+						</ul>                                     
+						<!-- poeticsoft-woo-agora-color-size></poeticsoft-woo-agora-color-size --> 
+						<poeticsoft-woo-agora-data></poeticsoft-woo-agora-data>                      
+						<poeticsoft-woo-agora-stock></poeticsoft-woo-agora-stock> 
 					</div>
 				</div>
 			</div>
@@ -1670,7 +2378,7 @@ APP.directive(
 /* excel.js */
 
 APP.directive(
-		'poeticsoftWooAgoraExcel', 
+		'poeticsoftWooAgoraData', 
 	function() {
 
 		function controller(
@@ -1703,7 +2411,7 @@ APP.directive(
         },
 				select: function(e) {
 					
-					$scope.AgoraKendoSpreadsheet
+					$scope.AgoraDataKendoSpreadsheet
 					.fromFile(e.files[0].rawFile)
 					.then(sheetLoaded);
 				}
@@ -1730,8 +2438,14 @@ APP.directive(
 
 				$rootScope.$emit('notifydialog', { text: 'Searching Products sheet...' });
 
-				ProductsSheet = $scope.AgoraKendoSpreadsheet.sheetByName('Productos');
-				if(!ProductsSheet) {
+				ProductsSheet = $scope.AgoraDataKendoSpreadsheet.sheetByName('Productos');
+				if(!ProductsSheet) {						
+
+					$scope.AgoraDataKendoSpreadsheet.sheets()
+					.forEach(function(Sheet) {
+
+						Sheet.range(kendo.spreadsheet.SHEETREF).clear()
+					});
 					
 					$rootScope.$emit('closedialog');
 					return Notifications.show({ errors: 'Load an Excel file with a "Products" sheet' });
@@ -1753,8 +2467,14 @@ APP.directive(
 					$rootScope.$emit('notifydialog', { text: 'Sheet valid, processsing...' });
 					$timeout(updateSheet, 200);
 
-				} else {
-			
+				} else {					
+
+					$scope.AgoraDataKendoSpreadsheet.sheets()
+					.forEach(function(Sheet) {
+
+						Sheet.range(kendo.spreadsheet.SHEETREF).clear()
+					});
+
 					$rootScope.$emit('closedialog');
 					return Notifications.show(
 						{ 
@@ -1786,7 +2506,7 @@ APP.directive(
 				Products.FootPrint.NoEdit.split('')
 				.forEach(function(ColumnIndex) {
 
-					var Range = ColumnIndex + '2:' + ColumnIndex + RowCount;
+					var Range = ColumnIndex + '1:' + ColumnIndex + RowCount;
 					ProductsSheet.range(Range).enable(false)
 				});
 
@@ -1990,11 +2710,11 @@ APP.directive(
 						delete ProductsSheetData.activeCell;
 						delete ProductsSheetData.selection;
 
-						$scope.AgoraKendoSpreadsheet.fromJSON({
+						$scope.AgoraDataKendoSpreadsheet.fromJSON({
 							sheets: [ProductsSheetData]
 						});				
 						
-						ProductsSheet = $scope.AgoraKendoSpreadsheet.activeSheet();
+						ProductsSheet = $scope.AgoraDataKendoSpreadsheet.activeSheet();
 						RowCount = ProductsSheet._rows._count;
 			
 						$scope.allowProcessing = true;
@@ -2005,8 +2725,8 @@ APP.directive(
 
 							$rootScope.$emit('closedialog');
 
-							/* DEBUG */
-							$scope.generateWebProducts();
+							/* DEBUG 
+							$scope.generateWebProducts();*/
 							
 						}, 200);
 
@@ -2084,7 +2804,7 @@ APP.directive(
 
 			/* Spreadsheet config */
 		
-			$scope.AgoraSpreadsheetConfig = {
+			$scope.AgoraDataSpreadsheetConfig = {
 				toolbar: {
 					home: false,
 					insert: false,
@@ -2103,9 +2823,12 @@ APP.directive(
 			
 			$scope.$on("kendoWidgetCreated", function(event, widget){
       
-        if (widget === $scope.AgoraKendoSpreadsheet) { 
+        if (widget === $scope.AgoraDataKendoSpreadsheet) { 
 					
-					$scope.loadData();
+					$rootScope.$on('loader_excelresources_ready', function() {
+
+						$scope.loadData();
+					});
 				}
 			});
 		}
@@ -2115,7 +2838,7 @@ APP.directive(
 			replace: true,
 			scope: true,
 			controller: controller,
-			template: `<div class="poeticsoft-woo-agora-excel">
+			template: `<div class="poeticsoft-woo-agora-data">
 				<div class="SpreadsheetTools">
 					<input kendo-upload="AgoraKendoUpload"
 						     name="file"
@@ -2126,7 +2849,7 @@ APP.directive(
 						<button class="k-button"
 										ng-click="generateWebProducts()"
 										ng-disabled="!allowProcessing">
-							To web
+							Apply
 						</button>
 						<button class="k-button"
 										ng-click="loadData()"
@@ -2141,8 +2864,409 @@ APP.directive(
 					</div>
 				</div>
 				<div class="SpreadsheetView">
-					<div kendo-spreadsheet="AgoraKendoSpreadsheet"
-							 k-options="AgoraSpreadsheetConfig">
+					<div kendo-spreadsheet="AgoraDataKendoSpreadsheet"
+							 k-options="AgoraDataSpreadsheetConfig">
+					</div>
+				</div>
+			</div>`
+		};
+	});
+/* excel.js */
+
+APP.directive(
+		'poeticsoftWooAgoraStock', 
+	function() {
+
+		function controller(
+			$http,
+			$q,
+			$rootScope,
+			$scope,
+			$timeout,
+			Products,
+			Notifications,
+			Stock,
+			Loader
+		) {
+			
+			$scope.AllowApply = false;
+			$scope.DataChanged = false;
+			$scope.StockChanged = true;
+
+			var InventarioSheet;
+
+			// Loader
+
+			$scope.AgoraKendoUploadConfig = {
+				multiple: false,
+				async: {
+					autoUpload: false
+				},
+				validation: {
+					allowedExtensions: ['.xlsx'],
+				},
+        localization: {
+            select: "Select EXCEL file"
+        },
+				select: function(e) {
+
+					$scope.AllowApply = false;
+					$scope.DataChanged = false;
+					
+					$scope.AgoraStockKendoSpreadsheet
+					.fromFile(e.files[0].rawFile)
+					.then(function() {
+
+						$rootScope.$broadcast('opendialog', {
+							Title: 'Stock process'
+						});
+
+						sheetLoaded(true)
+						.then(function() {
+
+							$scope.AllowApply = true;
+							$scope.DataChanged = true;
+	
+							$rootScope.$emit('closedialog');
+						});
+					});
+				}
+			}
+
+			function sheetLoaded() {
+
+				var $Q = $q.defer();
+
+				// There is a sheet "Inventario"
+
+				$rootScope.$emit('notifydialog', { text: 'Searching Inventario sheet...' });
+
+				InventarioSheet = $scope.AgoraStockKendoSpreadsheet.sheetByName('Inventario');
+				if(!InventarioSheet) {							
+
+					$scope.AgoraStockKendoSpreadsheet.sheets()
+					.forEach(function(Sheet) {
+
+						Sheet.range(kendo.spreadsheet.SHEETREF).clear()
+					});
+					
+					$rootScope.$emit('closedialog');
+					return Notifications.show({ errors: 'Load an Excel file with an "Inventario" sheet' });
+				}	
+
+				// Fields secuence validation
+
+				$rootScope.$emit('notifydialog', { text: 'Validating sheet...' });
+
+				RowCount = InventarioSheet._rows._count;				
+
+				InventarioSheet.range(
+					'A2:' + 
+					Products.FootPrint.Stock.MaxCellIndex + 
+					RowCount
+				).sort(Products.FootPrint.Stock.SKUCellIndex);
+						
+				var FieldsRow = InventarioSheet.range(
+					'A1:' + Products.FootPrint.Stock.MaxCellIndex + 1
+				).values()[0];
+				var FieldsFootPrint = FieldsRow.join('|');
+
+				if(FieldsFootPrint == Products.FootPrint.Stock.Hash) {
+
+					$rootScope.$emit('notifydialog', { text: 'Extracting data...' });
+
+				} else {							
+
+					$scope.AgoraStockKendoSpreadsheet.sheets()
+					.forEach(function(Sheet) {
+
+						Sheet.range(kendo.spreadsheet.SHEETREF).clear()
+					});
+			
+					$rootScope.$emit('closedialog');
+					return Notifications.show(
+						{ 
+							errors: 'Error, Products sheet doesn\'t have appropiate fields structure, get another file.'
+						},
+						true,
+						4000
+					);
+				}
+
+				//  Disable edit				
+
+				Products.FootPrint.Stock.NoEdit.split('')
+				.forEach(function(ColumnIndex) {
+
+					var Range = ColumnIndex + '1:' + ColumnIndex + RowCount;
+					InventarioSheet
+					.range(Range)
+					.enable(false)
+					.background('transparent')
+					.color('black');
+				});
+
+				// Extract data				
+
+				$timeout(function() {				
+
+					Stock.NewData = {};
+
+					var Rows = InventarioSheet.toJSON().rows;
+					Rows.shift(); // Extract field names
+
+					Rows.forEach(function(Row) {
+
+						var SKUCell = Row.cells.find(function(Cell) {
+
+							return Cell.index == 4; // 'Código Barras';
+						});
+
+						if(!SKUCell) return;
+						var SKU = $.trim(SKUCell.value).split(' ').join('').split(',').join('.');
+
+						if(SKU == '') return;
+
+						var StockCell = Row.cells.find(function(Cell) {
+
+							return Cell.index == 5; // 5 > Stock Teórico (Uds. Venta) | 6 > Stock real;
+						});
+
+						if(!StockCell) return;
+
+						Stock.NewData[SKU] = {
+							Value: $.trim(StockCell.value),
+							Index: Row.index + 1
+						};
+					});
+
+					$rootScope.$emit('notifydialog', { text: 'Stock Data Ready' });
+
+					$timeout(function() {
+
+						$Q.resolve();
+
+					}, 200);
+				}, 200);
+
+				return $Q.promise;
+			}
+		
+			$scope.AgoraStockSpreadsheetConfig = {
+				toolbar: {
+					home: false,
+					insert: false,
+					data: false
+				},
+				excel: {
+					fileName: 'WEB-AGORA-STOCK.xlsx'
+				}
+			};	
+
+			// Apply stock to web products
+
+			$scope.applyToWebProducts = function() {	
+				
+				$scope.AllowApply = false;
+
+				$rootScope.$broadcast('opendialog', {
+					Title: 'Apply stock'
+				});
+				$rootScope.$emit('notifydialog', { text: 'Updating web products' });
+
+				$timeout(function() {
+
+					var Data = {
+						InventarioSheetData: InventarioSheet.toJSON()
+					};		
+
+					$rootScope.$emit('notifydialog', { text: 'Saving stock data' });			
+
+					$http.post(
+						'/wp-json/poeticsoft/woo-agora-excel-stock-update',
+						Data
+					)
+					.then(function(Response) {
+
+						var Code = Response.data.Status.Code;
+						if(Code == 'OK'){
+							
+							$scope.AllowApply = true;
+							$scope.DataChanged = false;
+
+						} else {
+
+							Notifications.show({ errors: Response.data.Status.Reason });
+						}
+
+						Products.updateStock();
+
+						$rootScope.$emit('closedialog');
+					});
+				}, 200);			
+			}					
+
+			/* Load last excel saved */
+
+			function loadData() {
+
+				var $Q = $q.defer();
+
+				$http.get('/wp-json/poeticsoft/woo-agora-excel-stock-read')
+				.then(function(Response) {
+
+					var Code = Response.data.Status.Code;
+					if(Code == 'OK'){ 
+
+						if(Response.data.Data.length == 0) {
+
+							$rootScope.$emit('notifydialog', { text: 'No data' });
+
+							return $timeout(function() {
+
+								$rootScope.$emit('closedialog');
+								
+							}, 200);
+						}
+
+						var InventarioSheetData = Response.data.Data;
+						delete InventarioSheetData.activeCell;
+						delete InventarioSheetData.selection;
+
+						$scope.AgoraStockKendoSpreadsheet.fromJSON({
+							sheets: [InventarioSheetData]
+						});				
+						
+						InventarioSheet = $scope.AgoraStockKendoSpreadsheet.activeSheet();
+						RowCount = InventarioSheet._rows._count;
+
+						$rootScope.$emit('notifydialog', { text: Response.data.Status.Message });
+
+						$timeout(function() {
+
+							sheetLoaded()
+							.then(function() {
+
+								$Q.resolve();
+							});
+							
+						}, 200);
+
+					} else {
+
+						Notifications.show({ errors: Response.data.Status.Reason });
+
+						$Q.resolve();
+					}
+				});
+
+				return $Q.promise
+			}
+
+			$scope.download = function() {
+
+				$scope.AgoraStockKendoSpreadsheet.saveAsExcel();
+			}
+
+			// Revert
+
+			$scope.revert = function() {				
+			
+				$scope.AllowApply = false;			
+				$scope.allowProcessing = false;
+
+				$rootScope.$broadcast('opendialog', {
+					Title: 'Loading stock data'
+				});
+
+				loadData()
+				.then(function() {
+
+					$rootScope.$broadcast('closedialog');									
+			
+					$scope.AllowApply = true;			
+					$scope.allowProcessing = true;
+				});
+			}
+
+			// Update new stock
+
+			$scope.$on('updateexcelstock', function(Event, Data) {
+
+				Data.forEach(function(Product) {
+
+					var StockProduct = Stock.NewData[Product.sku];
+					if(StockProduct) {
+
+						var RowIndex = Stock.NewData[Product.sku].Index;
+						var StockCell = InventarioSheet.range(Products.FootPrint.Stock.StockCellIndex + RowIndex);
+						var ActualValue = StockCell.value();
+						var ExportValue = Product.export_stock_quantity;
+
+						if(ActualValue != ExportValue) {
+						
+							StockCell.value(ExportValue);
+							StockCell.background('#e67959');
+							StockCell.color('#ffffff');
+						} else {
+						
+							StockCell.background('#71e659');
+							StockCell.color('#ffffff');							
+						}
+					}
+				});												
+			
+				$scope.AllowApply = true;			
+			});
+
+			// Load Agora Stock data
+			
+			$scope.$on("kendoWidgetCreated", function(event, widget){
+      
+        if (widget === $scope.AgoraStockKendoSpreadsheet) { 
+
+					loadData()
+					.then(function() {
+
+						Loader.ready('ExcelStock');
+					});
+				}
+			});
+		}
+
+		return {
+			restrict: 'E',
+			replace: true,
+			scope: true,
+			controller: controller,
+			template: `<div class="poeticsoft-woo-agora-stock">
+				<div class="SpreadsheetTools">
+					<input kendo-upload="AgoraKendoUpload"
+						     name="file"
+						     type="file"
+						     k-options="AgoraKendoUploadConfig"
+					/>
+					<div class="Actions">
+						<button class="k-button"
+										ng-click="applyToWebProducts()"
+										ng-disabled="!AllowApply">
+							Apply
+						</button>
+						<button class="k-button"
+										ng-click="revertData()"
+										ng-disabled="!DataChanged">
+							Revert
+						</button>
+						<button class="k-button"
+										ng-click="download()"
+										ng-disabled="!StockChanged">
+							Download
+						</button>
+					</div>
+				</div>
+				<div class="SpreadsheetView">
+					<div kendo-spreadsheet="AgoraStockKendoSpreadsheet"
+							 k-options="AgoraStockSpreadsheetConfig">
 					</div>
 				</div>
 			</div>`
@@ -2235,7 +3359,7 @@ APP.directive(
 						}
 					});
 
-					$rootScope.$emit('notifydialog', { text: 'Data Ready' });
+					$rootScope.$emit('notifydialog', { text: 'Color Size Data Ready' });
 
 					$timeout(function() {
 
@@ -2264,28 +3388,13 @@ APP.directive(
 				$rootScope.$broadcast('opendialog', {
 					Title: 'Saving Color & Sizes data...'
 				});
+				
+				ColorSize.save()
+				.then(function() {
 
-				$http.post(
-          '/wp-json/poeticsoft/woo-products-color-size-update',
-          ColorSize.Data
-        )
-        .then(function(Response) {
-
-          var Code = Response.data.Status.Code;
-          if(Code == 'OK'){ 
-
-						$rootScope.$emit('notifydialog', { text: Response.data.Status.Message });
-          } else {
-
-						$rootScope.$emit('notifydialog', { text: 'Error: ' + Response.data.Status.Reason }); 
-					}       
-
-					$timeout(function() {
-
-						$rootScope.$emit('closedialog');
-						$scope.allowProcessing = true;
-					});
-        });				
+					$rootScope.$emit('closedialog');
+					$scope.allowProcessing = true;
+				});
 			}
 		}
 
@@ -2328,24 +3437,52 @@ function() {
   function controller(
     $rootScope,
     $scope, 
-    $timeout,
     $window, 
-    ExcelToWeb,
+    $timeout,
     Products, 
     Categories,
-    Images
+    Images,
+    Stock
   ) {
 
     /* ----------------------------------------------------
       PRODUCT TREE LIST
     */
 
-    $scope.haveImages = function(SKU) {
+    $scope.uploadedImages = function(SKU) {
 
       return Images.Group[SKU] && Images.Group[SKU].count || 0;
     }
 
-    /* Columns config */
+    $scope.assignedImages = function(Item) {
+
+      if(Item.type == 'variation') {
+
+        return Item.image_id ? 1 : 0;
+      } else {
+
+        return (Item.image_id ? 1 : 0) + 
+                ' / ' + 
+               ((Item.gallery_image_ids && Item.gallery_image_ids.length) || 0);
+      }
+    }
+
+    $scope.statusChanged = function(Item) {
+
+      if(Item.status == 'changed' && Item.changes.indexOf('stock') != -1) {
+
+        return 'stockchanged';
+      }
+      
+      if(Item.changes && Item.changes.indexOf('exportstock') != -1) {
+
+        return 'exportstock';
+      }
+
+      return '';
+    }
+
+    /* Columns config */    
 
     var Columns = [
       {
@@ -2361,25 +3498,75 @@ function() {
         attributes: { class: 'Type' }
       },
       {
-        title: 'Data',
-        width: 45,
-        template: '<i class="k-icon k-i-question"></i>',
-        attributes: { class: 'Data' }
-      },
+        title: 'Stock',
+        columns: [
+          {
+            field: 'stock_quantity',
+            title: 'Web',
+            template: '<span title="Actual stock in web" ' +
+                            'class="#= type # {{ statusChanged(dataItem) }}">' +
+                          '#= stock_quantity != null ? stock_quantity : "" #' +
+                      '</span>',
+            width: 60,
+            attributes: { class: 'Web' }
+          },
+          {
+            field: 'last_stock_quantity',
+            title: 'Last',
+            template: '<span title="Last value loaded from excel stock" ' +
+                            'class="#= type # {{ statusChanged(dataItem) }}">' +
+                        '#= last_stock_quantity != null ? last_stock_quantity : "" #' +
+                      '</span>',
+            width: 60,
+            attributes: { class: 'Last' }
+          },
+          {
+            field: 'import_stock_quantity',
+            title: 'Import',
+            template: '<span title="Actual value loaded from stock excel" ' +
+                            'class="#= type # {{ statusChanged(dataItem) }}">' +
+                        '#= import_stock_quantity != null ? import_stock_quantity : "" #' +
+                      '</span>',
+            width: 60,
+            attributes: { class: 'Import' }
+          },
+          {
+            field: 'export_stock_quantity',
+            title: 'Export',
+            template: '<span title="Value to export in stock excel" ' +
+                            'class="#= export_stock_quantity < 0 ? \"Negative\" : \"\" # ' +
+                            '#= type # {{ statusChanged(dataItem) }}">' +
+                        '#= export_stock_quantity != null ? export_stock_quantity : "" #' + 
+                      '</a>',
+            width: 60,
+            attributes: { class: 'Export' }
+          }
+        ],
+        attributes: { class: 'Stock' }
+      }, 
       {
         title: 'Image/s',
-        width: 70,
-        template: '{{ haveImages(dataItem.sku) }}',
-        attributes: { class: 'Image' }
+        columns: [
+          {
+            title: 'Asigned',
+            width: 70,
+            template: '{{ assignedImages(dataItem) }}',
+            attributes: { class: 'Image' }
+          },
+          {
+            title: 'Upload',
+            width: 70,
+            template: '{{ uploadedImages(dataItem.sku) }}',
+            attributes: { class: 'Image' }
+          }
+        ]
       },
       {
         field: 'status',
         title: 'Status',
         width: 60,
         template: '<div class="k-icon #= status #" title="#= status #"></div>',
-        attributes: {
-          class: 'Status'
-        }
+        attributes: { class: 'Status' }
       }
     ];
 
@@ -2392,13 +3579,13 @@ function() {
       toolbar: [
         {
           name: 'reload',
-          text: 'Revert to last saved',
+          text: 'Revert to web last saved',
           imageClass: 'k-icon k-i-undo Revert',
           click: revertFromWeb
         },
         {
           name: 'savetoweb',
-          text: 'Update web products',
+          text: 'Update web products & excel stock',
           imageClass: 'k-icon k-i-save Save',
           click: saveToWeb
         }
@@ -2406,9 +3593,6 @@ function() {
     }; 
 
     /* Tool bar */
-
-    var $RevertButton;
-    var $SaveButon;
 
     function revertFromWeb() {       
 
@@ -2420,33 +3604,44 @@ function() {
       Products.loadFromWeb()
       .then(function() {
 
-        $RevertButton.prop('disabled', true);
-        $SaveButton.prop('disabled', true);
         $rootScope.$emit('closedialog');
       });
     } 
 
-    function saveToWeb() {     
+    function saveToWeb() { 
+      
+      if(Products.CanUpdateWeb) {
 
-      $rootScope.$broadcast('opendialog', {
-        Title: 'Saving to WordPress..'
-      });
-      $rootScope.$emit('notifydialog', { text: 'Saving...' }); 
+        $rootScope.$broadcast('opendialog', {
+          Title: 'Saving to WordPress..'
+        });
+        $rootScope.$emit('notifydialog', { text: 'Saving...' }); 
 
-      Products.saveToWeb()
-      .then(function() {
+        Stock.saveState()
+        .then(function() {
 
-        // $RevertButton.prop('disabled', true);
-        // $SaveButton.prop('disabled', true);
-        $rootScope.$emit('closedialog');
-      });
-    }    
+          Categories.saveRelations();       // TODO Errors
+          Categories.saveProductsFamily();
 
-		$scope.$on('productschanged', function() {        
+          Products.saveToWeb()
+          .then(function() {
 
-      $RevertButton.prop('disabled', false);
-      $SaveButton.prop('disabled', false);
-    });
+            $rootScope.$emit('closedialog');
+          });
+        });
+      } else {
+
+        $rootScope.$broadcast('opendialog', {
+          Title: 'Stock negative!'
+        });
+        $rootScope.$emit('notifydialog', { text: 'Cannot update web with negative stock' }); 
+
+        $timeout(function() {
+
+          $rootScope.$emit('closedialog');
+        }, 1000);
+      }
+    }
 
     /* Resize grid */
 
@@ -2454,6 +3649,7 @@ function() {
 
       $scope.ProductKendoTreeList.resize();
     }
+
     /* Data tooltip */
 
     function dataContent(E) {
@@ -2466,8 +3662,10 @@ function() {
       }
 
       var RowData = $scope.ProductKendoTreeList.dataItem(Row.eq(0)).toJSON();
+      var Fields = Object.keys(Products.DSConfig.schema.model.fields);
       var TooltipContent = '<div class="DataToolTip">';
-      Object.keys(RowData)
+
+      Fields
       .forEach(function(Key) {
 
         var Field = RowData[Key];
@@ -2478,11 +3676,16 @@ function() {
 
             Field = Field.map(function(ID) {
 
-              var Categorie = Categories.DS.get(ID);
+              var Categorie = Categories.RemoteDS.get(ID);
               var Text = Categorie ? Categorie.get('name') : 'Error';
-              return Text;
+              return '<div>(' + ID + ') ' + Text + '</div>';
             })
-            .join(' - ');
+            .join('');
+          }
+
+          if(Key == 'gallery_image_ids') {
+
+            Field = Field.join(' - ');
           }
 
           if(
@@ -2490,7 +3693,15 @@ function() {
             Key == 'variations'
           ) {
 
-            Field = JSON.stringify(Field, null, 4);
+            Field = Object.keys(Field)
+            .map(function(Key) {
+
+              var Name = Key;
+              var Value = Field[Key].split('|').join(' - ');
+
+              return '<div><span>' + Name + '</span><span>' + Value + '</span></div>';
+            })
+            .join('');
           }
 
           TooltipContent += `<div class="Field">
@@ -2498,7 +3709,8 @@ function() {
             <span class="Value">${ Field }</span>
           </div>`
         }
-      })
+      });
+      
       TooltipContent += '</div>';
 
       return TooltipContent;
@@ -2511,10 +3723,6 @@ function() {
         var $GridElement = jQuery($scope.ProductKendoTreeList.element);
 
         $RevertButton = $GridElement.find('.k-grid-toolbar button[data-command="reload"]');
-        $SaveButton = $GridElement.find('.k-grid-toolbar button[data-command="savetoweb"]');
-
-        $RevertButton.prop('disabled', true);
-        $SaveButton.prop('disabled', true);
 
         var DataTooltip = $GridElement
         .find('.k-grid-content')
@@ -2535,18 +3743,11 @@ function() {
         $GridElement
         .on(
           'mouseenter',
-          '.Data',
+          '.Status',
           function() {
 
             DataTooltip.show(jQuery(this));
-          }
-        )
-        .on(
-          'mouseleave',
-          '.Data',
-          function() {
-
-            // DataTooltip.hide();
+            return false;
           }
         );
 
@@ -2579,18 +3780,21 @@ APP.directive(
   function() {
 
     function controller(
-      $scope, 
-      $http, 
+      $rootScope,
+      $scope,
       Notifications, 
-      Categories
+      Categories,
+      Products
     ) {
 
       $scope.SelectedCategorieId = null;
       $scope.TreeChanged = false;
+      $scope.FamilySelectionChanged = false;
 
       function loadRelations(E) {
 
         $scope.FamiliesListView.clearSelection();
+        $scope.FamilySelectionChanged = false;
 
         if(E) {
 
@@ -2621,7 +3825,9 @@ APP.directive(
         var NewList = [];
         List.forEach(function(Item) {
 
-          if(Item != $scope.SelectedCategorieId) { NewList.push(Item); }
+          if(Item != $scope.SelectedCategorieId) { 
+            
+            NewList.push(Item); }
         });
 
         return NewList;
@@ -2638,6 +3844,8 @@ APP.directive(
       }
 
       $scope.updateRelations = function(E) {
+
+        $scope.FamilySelectionChanged = false;
 
         var $Selection = $scope.FamiliesListView.select();
         var SelectedFamilies = [];
@@ -2669,6 +3877,26 @@ APP.directive(
         loadRelations();
       }
 
+      /* -------------------------------------------------------------------
+        Change family selection TODO real changes */
+
+      function changeFamilySelection(E) {
+
+        var IsSelected = jQuery(E.target).hasClass('k-state-selected');
+        var CtrlKey = E.ctrlKey;
+
+        if(!(IsSelected && !CtrlKey)) {
+
+          $scope.$apply(function() {
+
+            $scope.FamilySelectionChanged = true;
+          });
+        }
+      }
+
+      /* -------------------------------------------------------------------
+        Back to last saved relations  */
+
       $scope.revert = function() {
 
         Notifications.show('Revert relations to saved...', true);
@@ -2683,27 +3911,21 @@ APP.directive(
         });
       }
 
-      $scope.save = function() {
-
-        Notifications.show('Saving new web categorization...');
+      $scope.apply = function() {    
 
         $scope.TreeChanged = false;
 
-        $http.post(
-          '/wp-json/poeticsoft/woo-families-categories-update',
-          Categories.RelationsDS.data().toJSON()
-        )
-        .then(function(Response) {
+        $rootScope.$broadcast('opendialog', {
+          Title: 'Saving Families Categories relations...'
+        });
+        $rootScope.$emit('notifydialog', { text: 'Saving and updating products...' }); 
 
-          var Code = Response.data.Status.Code;
-          if(Code == 'OK'){            
-
-            Notifications.show(Response.data.Status.Message);
-          } else {
-
-            Notifications.show({ errors: Response.data.Status.Reason });
-            $scope.TreeChanged = true;
-          }
+        Categories.saveRelations()
+        .then(function() {
+          
+          Products.updateCategories();
+            
+          $rootScope.$emit('closedialog');
         });
       }
 
@@ -2719,7 +3941,7 @@ APP.directive(
 
       $scope.FamiliesListViewConfig = {
         dataSource: Categories.RelationsDS,
-        selectable: 'multiple',        
+        selectable: 'multiple',
         template: `<div class="ListViewItem"
           data-family="#= family #">
           #= family # [#= categories.length #]
@@ -2733,6 +3955,11 @@ APP.directive(
         if (widget === $scope.CategoriesTreeView) {
           
           $scope.CategoriesTreeView.element.on('click', '.TreeViewItem', loadRelations);
+        }
+      
+        if (widget === $scope.FamiliesListView) {
+          
+          $scope.FamiliesListView.element.on('mousedown', '.ListViewItem', changeFamilySelection);          
         }
       });
     }
@@ -2749,10 +3976,10 @@ APP.directive(
                   class="k-button">
             Revert to saved
           </button>
-          <button data-ng-click="save()"
+          <button data-ng-click="apply()"
                   ng-disabled="!TreeChanged"
                   class="k-button">
-            Save to web
+            Apply
           </button>
         </div>
         <div class="Views">
@@ -2765,9 +3992,9 @@ APP.directive(
           </div>
           <div class="Tools">
             <button ng-click="updateRelations()"
-                    ng-disabled="!SelectedCategorieId"
+                    ng-disabled="!FamilySelectionChanged"
                     class="k-button">
-              Update Category
+              Update Relation
             </button>
           </div>
           <div class="Families">
@@ -2794,10 +4021,12 @@ APP.directive(
 
     function controller(
       $http,
+      $rootScope,
       $scope, 
       Notifications, 
       Products,
       Images, 
+      Loader, 
       $window,
       $element
     ) {
@@ -2818,7 +4047,8 @@ APP.directive(
         },
         complete: function() {
 
-          $scope.imageGridConfig.dataSource.read();
+          $scope.imageGridConfig.dataSource.read()
+          .then(Products.updateImages);
         },
         validation: {
           allowedExtensions: ['.jpg', '.jpeg', '.png', '.gif'],          
@@ -2858,8 +4088,11 @@ APP.directive(
           { 
             field: 'image', 
             title: '&nbsp;',
-            template: '<img src="/wp-content/uploads/product-images/#: thumb  #?#= Math.round(Math.random() * 1000) #" ' +
-                           'style="display: block; width:100%;"/>',           
+            template: '<a href="/wp-content/uploads/product-images/#: view  #?#= Math.round(Math.random() * 1000) #" ' +
+                          'target="_new">' + 
+                          '<img src="/wp-content/uploads/product-images/#: thumb  #?#= Math.round(Math.random() * 1000) #" ' +
+                               'style="display: block; width:100%;"/>' +
+                      '</a>',           
             width: '100px',          
             attributes: {
               style: 'padding: 0; border-width: 1px 0 0 0;'
@@ -2906,9 +4139,19 @@ APP.directive(
        }
       }
 
-      $scope.refresh = function() {
+      $scope.refresh = function() {              
 
-        Images.DS.read();
+        $rootScope.$broadcast('opendialog', {
+          Title: 'Web images'
+        });
+        $rootScope.$emit('notifydialog', { text: 'Updating list...' });
+
+        Images.DS.read()
+        .then(function() {
+
+          Products.updateImages();
+          $rootScope.$emit('closedialog');
+        });
       }
       
       $scope.openall = function() {
@@ -2954,6 +4197,8 @@ APP.directive(
             if(Code == 'OK'){            
     
               $scope.ImageKendoUpload.options.validation.maxFileSize = Response.data.Data.MaxSize;
+
+              Loader.ready('MaxUploadSize');
     
             } else {
     

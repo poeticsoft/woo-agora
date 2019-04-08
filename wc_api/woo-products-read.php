@@ -87,7 +87,6 @@
 						'parent_sku' => $ProductData['sku'],
 						'regular_price' => $ProductVariation['display_regular_price'],
 						'stock_quantity' => $ProductVariation['max_qty'] ? $ProductVariation['max_qty'] : 0,
-						'category_ids' => $ProductData['category_ids'],
 						'image_id' => $ProductVariation['image_id']
 					);
 					$Attributes = $ProductVariation['attributes'];
